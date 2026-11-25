@@ -1,0 +1,9 @@
+# 私人礼物内容（只留在本机）
+js/gifts.js
+assets/gifts/
+
+# 本地设置
+.claude/settings.local.json
+node_modules/
+.DS_Store
+Thumbs.db

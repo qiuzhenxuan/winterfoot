@@ -1,0 +1,761 @@
+/* =====================================================================
+   🎂 Birthday layer — title screen, dialogue, checklist, wish, banner,
+   fireworks, gift wrapping & envelope (Stardew wood + parchment style)
+   ===================================================================== */
+
+#title-screen.hidden,
+#dialogue-box.hidden,
+#bday-quest.hidden,
+#wish-overlay.hidden,
+#bday-banner.hidden,
+.gift-wrap-cover.hidden,
+.letter-envelope.hidden,
+.letter-reader.hidden,
+.gift-counter.hidden,
+.gift-nav-btn.hidden,
+.help-actions .hidden { display: none !important; }
+
+/* ---------- Title screen ---------- */
+#title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 115%, rgba(255, 168, 92, 0.42), transparent 60%),
+    linear-gradient(180deg, rgba(20, 28, 52, 0.9) 0%, rgba(42, 46, 86, 0.72) 55%, rgba(120, 72, 70, 0.55) 100%);
+  transition: opacity 0.9s ease;
+}
+#title-screen.leaving { opacity: 0; pointer-events: none; }
+body.title-active #control-panel,
+body.title-active #stardew-hud,
+body.title-active #hotbar-wrap,
+body.title-active #touch-controls,
+body.title-active #bday-quest,
+body.title-active #interact-prompt { opacity: 0; pointer-events: none; }
+
+.title-snow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+    radial-gradient(2px 2px at 80px 120px, #fff, transparent),
+    radial-gradient(3px 3px at 150px 60px, #fff, transparent),
+    radial-gradient(2px 2px at 220px 160px, #fff, transparent),
+    radial-gradient(2px 2px at 290px 40px, #fff, transparent);
+  background-size: 320px 200px;
+  opacity: 0.75;
+  animation: titleSnow 9s linear infinite;
+}
+@keyframes titleSnow {
+  from { background-position: 0 0; }
+  to { background-position: 60px 400px; }
+}
+
+.title-card {
+  position: relative;
+  text-align: center;
+  padding: 26px 34px 22px;
+  animation: titleRise 1.2s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+@keyframes titleRise {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.title-main {
+  font-size: clamp(40px, 9vw, 82px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #ffe9b0;
+  text-shadow:
+    0 3px 0 #7d4522,
+    0 6px 0 #4b2714,
+    0 10px 24px rgba(0, 0, 0, 0.55);
+}
+.title-sub {
+  margin-top: 10px;
+  font-size: clamp(15px, 3.4vw, 22px);
+  font-weight: 800;
+  color: #fff4dc;
+  letter-spacing: 0.2em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.title-start-btn {
+  margin-top: 30px;
+  padding: 12px 28px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, var(--parchment-light), var(--parchment));
+  border: 3px solid var(--wood-dark);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 2px var(--wood-light), 0 5px 0 rgba(25, 13, 8, 0.6);
+  cursor: pointer;
+  animation: titlePulse 1.8s ease-in-out infinite 1.2s;
+}
+.title-start-btn:hover { filter: brightness(1.06); }
+.title-start-btn:active { transform: translateY(3px); }
+@keyframes titlePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.title-tip {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: rgba(255, 240, 210, 0.75);
+  letter-spacing: 0.1em;
+}
+
+/* ---------- Stardew dialogue box ---------- */
+#dialogue-box {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 12px max(18px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 55%, rgba(10, 12, 22, 0.35));
+  cursor: pointer;
+}
+.dialogue-frame {
+  position: relative;
+  width: min(880px, 100%);
+  min-height: 150px;
+  display: flex;
+  gap: 14px;
+  padding: 16px 16px 16px 22px;
+  animation: dialogueIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes dialogueIn {
+  from { opacity: 0; transform: translateY(26px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.dialogue-text {
+  flex: 1;
+  font-size: clamp(15px, 2.2vw, 19px);
+  line-height: 1.75;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: pre-wrap;
+  min-height: 3.5em;
+}
+.dialogue-portrait {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-left: 14px;
+  border-left: 3px solid rgba(125, 69, 34, 0.35);
+}
+.dialogue-portrait-img {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 58px;
+  background: linear-gradient(180deg, #ffe7b8, #f2c98a);
+  border: 3px solid var(--wood-dark);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px var(--wood-light);
+  overflow: hidden;
+}
+.dialogue-portrait-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+.dialogue-name {
+  min-width: 96px;
+  padding: 3px 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff3dc;
+  background: var(--wood-mid);
+  border: 2px solid var(--wood-dark);
+  border-radius: 4px;
+}
+.dialogue-next {
+  position: absolute;
+  right: 136px;
+  bottom: 8px;
+  font-size: 14px;
+  color: var(--wood-mid);
+  opacity: 0;
+}
+.dialogue-next.ready {
+  opacity: 1;
+  animation: nextBounce 0.8s ease-in-out infinite;
+}
+@keyframes nextBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
+/* ---------- Birthday checklist (journal) ---------- */
+#bday-quest {
+  position: absolute;
+  right: 14px;
+  top: 190px;
+  width: 214px;
+  z-index: 19;
+  padding: 7px 10px 8px;
+}
+#bday-quest.bump { animation: questBump 0.6s ease; }
+@keyframes questBump {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.bday-quest-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #3e200d;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.bday-quest-count {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #9c3b30;
+  color: #fff6e3;
+}
+#bday-quest.all-done .bday-quest-count { background: var(--accent-green); }
+.bday-quest-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#bday-quest.collapsed .bday-quest-list { display: none; }
+.bday-quest-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #4a260f;
+}
+.q-box {
+  flex: 0 0 15px;
+  height: 15px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: #fff9ec;
+  border: 2px solid var(--wood-mid);
+  border-radius: 3px;
+}
+.bday-quest-list li.done { color: rgba(74, 38, 15, 0.55); }
+.bday-quest-list li.done .q-text { text-decoration: line-through; text-decoration-color: rgba(156, 59, 48, 0.7); }
+.bday-quest-list li.done .q-box { background: var(--accent-green); border-color: #2f5e2a; }
+.bday-quest-list li.just-done .q-box { animation: checkPop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes checkPop {
+  0% { transform: scale(0.2); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Wish overlay ---------- */
+#wish-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(40, 22, 10, 0.55), rgba(6, 6, 14, 0.9));
+  animation: wishFade 1.2s ease both;
+}
+#wish-overlay.ready { cursor: pointer; }
+@keyframes wishFade { from { opacity: 0; } to { opacity: 1; } }
+.wish-text {
+  font-size: clamp(20px, 4vw, 32px);
+  font-weight: 900;
+  color: #ffe9b0;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 18px rgba(255, 196, 107, 0.6);
+  text-align: center;
+  padding: 0 20px;
+}
+.wish-bar {
+  width: min(320px, 70vw);
+  height: 12px;
+  border: 3px solid var(--wood-dark);
+  border-radius: 4px;
+  background: #2a1a10;
+  overflow: hidden;
+}
+.wish-bar-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #ffb957, #ffe169);
+}
+.wish-hint {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 240, 210, 0.8);
+}
+#wish-overlay.ready .wish-hint { color: #fff; animation: titlePulse 1.2s ease-in-out infinite; }
+
+/* ---------- Birthday banner ---------- */
+#bday-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 18%;
+  z-index: 70;
+  text-align: center;
+  pointer-events: none;
+}
+#bday-banner.show { animation: bannerIn 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes bannerIn {
+  0% { opacity: 0; transform: scale(0.6) translateY(20px); }
+  100% { opacity: 1; transform: none; }
+}
+.bday-banner-main {
+  font-size: clamp(34px, 8vw, 72px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffe169;
+  text-shadow:
+    0 3px 0 #b8572c,
+    0 6px 0 #4b2714,
+    0 0 30px rgba(255, 200, 90, 0.6);
+  padding: 0 14px;
+}
+.bday-banner-sub {
+  margin-top: 10px;
+  font-size: clamp(14px, 2.6vw, 20px);
+  font-weight: 800;
+  color: #fff6e3;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  padding: 0 16px;
+}
+
+/* ---------- Help modal actions ---------- */
+.help-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ---------- Gift wrapping paper ---------- */
+.gift-img-wrap { position: relative; }
+.gift-wrap-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px solid #e3cfa8;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  filter: hue-rotate(var(--wrap-hue, 0deg));
+  background:
+    linear-gradient(90deg, transparent calc(50% - 14px), #f5c852 calc(50% - 14px), #f5c852 calc(50% + 14px), transparent calc(50% + 14px)),
+    linear-gradient(0deg, transparent calc(50% - 14px), #f5c852 calc(50% - 14px), #f5c852 calc(50% + 14px), transparent calc(50% + 14px)),
+    repeating-linear-gradient(45deg, #c93832 0 18px, #b02e29 18px 36px);
+  transition: transform 0.5s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.5s ease;
+}
+.gift-wrap-cover:hover .gift-wrap-bow { transform: scale(1.12) rotate(-6deg); }
+.gift-wrap-bow {
+  font-size: 54px;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.35));
+  transition: transform 0.15s ease;
+  animation: bowWiggle 2.2s ease-in-out infinite;
+}
+@keyframes bowWiggle {
+  0%, 80%, 100% { transform: rotate(0); }
+  85% { transform: rotate(-10deg); }
+  90% { transform: rotate(9deg); }
+  95% { transform: rotate(-5deg); }
+}
+.gift-wrap-tip {
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #4b2714;
+  background: #fff4dc;
+  border: 2px solid #4b2714;
+  border-radius: 4px;
+  filter: hue-rotate(calc(-1 * var(--wrap-hue, 0deg)));
+}
+.gift-wrap-cover.tearing {
+  transform: translateY(-30%) rotate(-8deg) scale(1.1);
+  opacity: 0;
+  pointer-events: none;
+}
+.gift-thumb { position: relative; }
+.gift-thumb-wrap {
+  position: absolute;
+  inset: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, #c93832 0 8px, #b02e29 8px 16px);
+}
+.gift-thumb.wrapped .gift-thumb-wrap { display: flex; }
+
+/* ---------- Envelope + letter reader ---------- */
+.letter-envelope {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 10px 18px;
+  cursor: pointer;
+}
+.env-body {
+  position: relative;
+  width: min(340px, 78vw);
+  aspect-ratio: 3 / 2;
+}
+.env-front,
+.env-paper,
+.env-flap {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.env-front {
+  inset: 0;
+  z-index: 3;
+  background:
+    linear-gradient(to top right, transparent 49.4%, #d9c091 49.6%, #d9c091 50.4%, transparent 50.6%) left bottom / 50% 62% no-repeat,
+    linear-gradient(to top left, transparent 49.4%, #d9c091 49.6%, #d9c091 50.4%, transparent 50.6%) right bottom / 50% 62% no-repeat,
+    linear-gradient(180deg, #fbf2dc, #efdcb4);
+  border: 3px solid #6b3b1c;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(26, 12, 5, 0.38);
+}
+.env-paper {
+  z-index: 2;
+  left: 8%;
+  right: 8%;
+  top: 8%;
+  bottom: 8%;
+  background: repeating-linear-gradient(180deg, #fdf6e4 0 14px, #ead6ad 14px 15px);
+  border: 2px solid #c49a62;
+  border-radius: 3px;
+  transition: transform 0.6s cubic-bezier(0.3, 0.8, 0.3, 1) 0.4s;
+}
+.env-flap {
+  z-index: 4;
+  top: 0;
+  height: 58%;
+  transform-origin: top center;
+  background: linear-gradient(180deg, #e9d6ab, #dcc28c);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transition: transform 0.45s ease-in;
+}
+.env-seal {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 58%;
+  width: 58px;
+  height: 58px;
+  margin: -29px 0 0 -29px;
+  border-radius: 50%;
+  font-size: 24px;
+  color: #f5c852;
+  background: radial-gradient(circle at 38% 32%, #e04a42, #a82420 65%, #6e1412);
+  border: 2px solid #5a100e;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  animation: sealPulse 1.6s ease-in-out infinite;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+@keyframes sealPulse {
+  0%, 100% { box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(255, 220, 120, 0.6); }
+  50% { box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 0 12px rgba(255, 220, 120, 0); }
+}
+.env-tip {
+  font-size: 13px;
+  font-weight: 800;
+  color: #6b3b1c;
+  transition: opacity 0.3s ease;
+}
+.letter-envelope.opening { cursor: default; }
+.letter-envelope.opening .env-seal { transform: scale(1.4) rotate(25deg); opacity: 0; }
+.letter-envelope.opening .env-flap { transform: scaleY(-1); }
+.letter-envelope.opening .env-paper { transform: translateY(-58%); z-index: 4; }
+.letter-envelope.opening .env-tip { opacity: 0; }
+
+.letter-reader.unfold .letter-sheet-wrap { animation: letterUnfold 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1); }
+@keyframes letterUnfold {
+  from { transform: scaleY(0.2) translateY(30%); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+.letter-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.letter-stage .letter-sheet-wrap { flex: 1; min-width: 0; }
+.gift-nav-btn:disabled { opacity: 0.35; cursor: default; }
+.letter-sheet-wrap { cursor: zoom-in; }
+.letter-sheet-wrap.zoomed {
+  cursor: zoom-out;
+  max-height: 72vh;
+  overflow: auto;
+  display: block;
+  touch-action: pan-x pan-y;
+}
+.letter-sheet-wrap.zoomed #letter-img {
+  width: 180%;
+  max-width: none;
+  max-height: none;
+}
+.letter-reader .letter-sub { margin-top: 6px; }
+
+@media (max-width: 820px) {
+  #bday-quest { padding: 5px 8px 6px; }
+  .bday-quest-head { font-size: 12px; }
+  .bday-quest-list li { font-size: 11px; }
+  .dialogue-frame { min-height: 120px; padding: 12px; gap: 10px; }
+  .dialogue-portrait { padding-left: 10px; }
+  .dialogue-portrait-img { width: 64px; height: 64px; font-size: 38px; }
+  .dialogue-name { min-width: 64px; font-size: 11px; }
+  .dialogue-next { right: 96px; }
+  .gift-wrap-bow { font-size: 40px; }
+  .letter-stage .gift-nav-btn { flex-basis: 30px; }
+}
+
+/* ---------- Phones: landscape only ---------- */
+#rotate-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(180deg, #141c2c 0%, #2a2e56 60%, #5a3a3a 100%);
+  touch-action: none;
+}
+body.force-rotate #rotate-hint { display: flex; }
+.rotate-card {
+  width: min(300px, 86vw);
+  padding: 26px 18px 22px;
+  text-align: center;
+}
+.rotate-phone {
+  width: 64px;
+  height: 108px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  border: 4px solid var(--wood-dark);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #bfe3ff, #f4fbff);
+  box-shadow: inset 0 0 0 2px var(--wood-light);
+  animation: rotatePhone 2.4s ease-in-out infinite;
+}
+@keyframes rotatePhone {
+  0%, 20% { transform: rotate(0deg); }
+  50%, 80% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+.rotate-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: 0.08em;
+}
+.rotate-sub {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  font-weight: 700;
+  color: #6b3b1c;
+}
+
+/* Short landscape phones: keep birthday UI compact */
+@media (max-height: 520px) and (orientation: landscape) {
+  .dialogue-frame { min-height: 96px; padding: 10px 12px; }
+  .dialogue-text { font-size: 14px; line-height: 1.6; min-height: 3em; }
+  .dialogue-portrait-img { width: 56px; height: 56px; font-size: 32px; }
+  .dialogue-name { min-width: 56px; font-size: 10.5px; }
+  .dialogue-next { right: 84px; }
+  .title-main { font-size: 40px; }
+  .title-start-btn { margin-top: 16px; padding: 9px 22px; font-size: 16px; }
+  .title-tip { margin-top: 8px; }
+  .letter-envelope { padding: 30px 10px 8px; }
+  .env-body { width: min(240px, 50vw); }
+  .wish-text { font-size: 20px; }
+  .bday-banner-main { font-size: 36px; }
+  #bday-banner { top: 12%; }
+}
+
+/* ---------- Mailbox letter ---------- */
+#mail-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 47;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(12, 16, 28, 0.6);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+#mail-modal.hidden { display: none !important; }
+.mail-paper {
+  position: relative;
+  width: min(440px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 28px 30px 20px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 31px, rgba(185, 140, 90, 0.22) 31px 32px),
+    linear-gradient(180deg, #fdf6e4, #f2e1bc);
+  border: 3px solid #6b3b1c;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 4px #fdf6e4, inset 0 0 0 6px #d9ba86, 0 10px 26px rgba(20, 10, 4, 0.45);
+  animation: mailIn 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+@keyframes mailIn {
+  from { opacity: 0; transform: translateY(40px) rotate(-2deg); }
+  to { opacity: 1; transform: none; }
+}
+.mail-stamp {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 46px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #4a8cc2;
+  border: 3px dashed #fdf6e4;
+  outline: 2px solid #4a8cc2;
+  color: #fdf6e4;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  transform: rotate(6deg);
+}
+.mail-title {
+  margin-right: 56px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #472611;
+}
+.mail-body {
+  margin-top: 14px;
+  font-family: "KaiTi", "STKaiti", "Kaiti SC", "Microsoft YaHei", serif;
+  font-size: 18px;
+  line-height: 32px;
+  color: #3c1e0c;
+  white-space: pre-wrap;
+}
+.mail-sign {
+  margin-top: 12px;
+  text-align: right;
+  font-family: "KaiTi", "STKaiti", "Kaiti SC", serif;
+  font-size: 17px;
+  color: #6b3b1c;
+}
+.mail-hint {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(107, 59, 28, 0.7);
+}
+
+/* ---------- Wish fireworks: clear the sky of UI while the camera looks out the window ---------- */
+#control-panel,
+#stardew-hud,
+#hotbar-wrap,
+#touch-controls,
+#bday-quest,
+#interact-prompt {
+  transition: opacity 0.9s ease;
+}
+body.sky-show #control-panel,
+body.sky-show #stardew-hud,
+body.sky-show #hotbar-wrap,
+body.sky-show #touch-controls,
+body.sky-show #bday-quest,
+body.sky-show #interact-prompt {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ---------- Animal birthday blessings (after the wish) ---------- */
+.bless-pop {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 7px 14px 8px;
+  border: 3px solid #6b3b1c;
+  border-radius: 10px;
+  background: #fff8e8;
+  box-shadow: 0 3px 0 #c79a62, 0 6px 14px rgba(40, 20, 8, 0.35);
+  color: #8a3b2a;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: blessPop 3.6s ease forwards;
+}
+.bless-pop::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 12px;
+  height: 12px;
+  background: #fff8e8;
+  border-right: 3px solid #6b3b1c;
+  border-bottom: 3px solid #6b3b1c;
+  transform: translateX(-50%) rotate(45deg);
+}
+@keyframes blessPop {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.6); }
+  8% { opacity: 1; transform: translate(-50%, -100%) scale(1.08); }
+  14% { transform: translate(-50%, -100%) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, -125%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -140%) scale(0.96); }
+}
+@media (max-height: 500px) {
+  .bless-pop { font-size: 13px; padding: 5px 10px 6px; }
+}

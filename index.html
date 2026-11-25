@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#141c2c" />
+  <title>冬麓 · Winterfoot</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M8 52 26 20l8 12 6-8 16 28z' fill='%235b6f93'/%3E%3Cpath d='M26 20l-6 11 6-3 4 4 4-0z' fill='%23f2f6fb'/%3E%3Cpath d='M40 24l-4 6 4-1 3 3 2-2z' fill='%23f2f6fb'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/birthday.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js"
+      }
+    }
+  </script>
+  <!-- Start downloading the big scripts in parallel right away -->
+  <link rel="modulepreload" href="./vendor/three/build/three.core.js" />
+  <link rel="modulepreload" href="./vendor/three/build/three.module.js" />
+  <link rel="modulepreload" href="./js/main.js" />
+</head>
+<body>
+  <!-- Loading screen: plain inline styles so it shows instantly, before any script has loaded -->
+  <div id="loading-screen" style="position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#141c2c 0%,#2a2e56 60%,#5a3a3a 100%);font-family:'Microsoft YaHei','PingFang SC',sans-serif;transition:opacity .8s ease;">
+    <div style="width:min(320px,80vw);text-align:center;">
+      <div style="font-size:30px;font-weight:900;letter-spacing:.14em;color:#ffe9b0;text-shadow:0 3px 0 #7d4522,0 6px 0 #4b2714;">冬麓</div>
+      <div id="loading-tip" style="margin:18px 0 12px;font-size:13px;font-weight:700;color:#fff4dc;min-height:1.4em;">正在铲开门前的积雪……</div>
+      <div style="height:16px;border:3px solid #4b2714;border-radius:5px;background:#2a1a10;box-shadow:inset 0 0 0 2px #7d4522;overflow:hidden;">
+        <div id="loading-bar" style="height:100%;width:6%;background:linear-gradient(180deg,#ffe169,#f5b935);transition:width .4s ease;"></div>
+      </div>
+      <div id="loading-error" style="display:none;margin-top:14px;font-size:12.5px;line-height:1.7;color:#ffd1c4;"></div>
+    </div>
+  </div>
+  <script>
+    // Eased fake progress while the module scripts download (real completion is signalled by main.js)
+    (function () {
+      var tips = ["正在铲开门前的积雪……", "给小动物们添一槽干草……", "把壁炉的火拨旺一点……", "在书桌上放好一封信……", "给礼物系上蝴蝶结……"];
+      var bar = document.getElementById("loading-bar");
+      var tip = document.getElementById("loading-tip");
+      var p = 6, n = 0, done = false;
+      var timer = setInterval(function () {
+        if (done) return;
+        p += (92 - p) * 0.06;
+        bar.style.width = p.toFixed(1) + "%";
+        if (++n % 9 === 0) tip.textContent = tips[(n / 9) % tips.length];
+      }, 200);
+      window.__finishLoading = function () {
+        if (done) return;
+        done = true;
+        clearInterval(timer);
+        bar.style.width = "100%";
+        var el = document.getElementById("loading-screen");
+        setTimeout(function () { el.style.opacity = "0"; el.style.pointerEvents = "none"; }, 250);
+        setTimeout(function () { el.remove(); }, 1200);
+      };
+      function fail(msg) {
+        if (done) return;
+        clearInterval(timer);
+        tip.textContent = "哎呀，小屋没能打开";
+        var e = document.getElementById("loading-error");
+        e.style.display = "block";
+        e.textContent = msg;
+      }
+      window.addEventListener("error", function (ev) {
+        var t = ev && ev.target;
+        if (t && t !== window && t.tagName) {
+          // resource error: only scripts/styles are fatal (a missing photo is not)
+          if (t.tagName === "SCRIPT" || t.tagName === "LINK") fail("有文件没下载下来，请检查网络后刷新页面。");
+        } else if (!done) {
+          fail("这台设备的浏览器可能不支持 3D 画面，换用最新版 Chrome / Safari 试试。");
+        }
+      }, true);
+      // Very slow network: reassure instead of looking frozen
+      setTimeout(function () { if (!done) tip.textContent = "网络有点慢，冬麓还在路上，再等一下下……"; }, 15000);
+    })();
+  </script>
+
+  <div id="game-root">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Screen Fade Overlay (for entering/leaving cottage or sleeping) -->
+    <div id="fade-overlay">
+      <div id="fade-message"></div>
+    </div>
+
+    <!-- Floating world popups (+1 胡萝卜, +45G, ) -->
+    <div id="floating-layer"></div>
+
+    <!-- Tactile finger tap ripple feedback (Minecraft / Stardew mobile feel!) -->
+    <div id="tap-ripple-layer"></div>
+
+    <!-- Top-Left: Atmosphere & Quick Scene Controls -->
+    <aside id="control-panel" class="sdv-panel">
+      <div class="panel-header">
+        <span class="panel-title">冬麓调色板</span>
+        <button id="btn-toggle-panel" class="mini-btn" title="收起/展开">▾</button>
+      </div>
+      <div id="panel-body">
+        <div class="ctrl-group">
+          <div class="ctrl-label">日夜时段</div>
+          <div class="btn-row" id="time-presets">
+            <button data-time="6.6" class="sdv-btn">清晨</button>
+            <button data-time="12.0" class="sdv-btn">正午</button>
+            <button data-time="17.15" class="sdv-btn active">黄金黄昏</button>
+            <button data-time="18.55" class="sdv-btn">蓝调时刻</button>
+            <button data-time="22.0" class="sdv-btn">深夜</button>
+          </div>
+          <div class="slider-row">
+            <input id="time-slider" type="range" min="0" max="24" step="0.05" value="17.15" />
+            <button id="btn-time-flow" class="sdv-btn small active" title="自动时间流逝">流逝: 开</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <div class="ctrl-label">降雪强度</div>
+          <div class="btn-row" id="snow-presets">
+            <button data-snow="0" class="sdv-btn">停雪</button>
+            <button data-snow="1" class="sdv-btn active">小雪</button>
+            <button data-snow="2" class="sdv-btn">大雪</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <div class="ctrl-label">农场与氛围</div>
+          <div class="btn-row">
+            <button id="btn-next-day" class="sdv-btn accent" title="推进到第二天早晨，浇过水的蔬菜会长大、动物也会产出新收获">下一天</button>
+            <button id="btn-toggle-indoor" class="sdv-btn" title="快速进入或离开冬麓小屋">进小屋</button>
+          </div>
+          <div class="btn-row" style="margin-top:5px;">
+            <button id="btn-audio" class="sdv-btn" title="开关音乐与音效">音效: 开</button>
+            <button id="btn-touch-mode" class="sdv-btn" title="切换手机触控轮盘界面">触控</button>
+            <button id="btn-help" class="sdv-btn" title="操作说明">? 帮助</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Top-Right: Classic Stardew Clock / Day / Gold Box -->
+    <section id="stardew-hud" class="sdv-panel">
+      <div class="hud-day-row">
+        <span id="hud-season-icon">❄</span>
+        <span id="hud-day">冬 · 第 1 天</span>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="hud-time-row">
+        <span id="hud-phase-icon">🌇</span>
+        <span id="hud-clock">17:24</span>
+        <span id="hud-location" class="loc-tag">院子</span>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="hud-gold-row">
+        <span class="gold-coin">G</span>
+        <span id="hud-gold">150</span>
+      </div>
+      <div class="hud-harvest-summary" id="hud-basket">
+        <span title="胡萝卜">🥕<b id="cnt-carrot">2</b></span>
+        <span title="白萝卜">🫜<b id="cnt-radish">0</b></span>
+        <span title="卷心菜">🥬<b id="cnt-cabbage">0</b></span>
+        <span title="小南瓜">🎃<b id="cnt-pumpkin">0</b></span>
+        <span title="柴火">🪵<b id="cnt-wood">3</b></span>
+      </div>
+      <div class="hud-harvest-summary hud-animal-summary" id="hud-animals">
+        <span title="农家土鸡蛋">🥚<b id="cnt-egg">0</b></span>
+        <span title="新鲜温牛奶">🥛<b id="cnt-milk">0</b></span>
+        <span title="蓬松冬羊毛">🧶<b id="cnt-wool">0</b></span>
+      </div>
+    </section>
+
+    <!-- Context Interaction Prompt -->
+    <div id="interact-prompt" class="hidden">
+      <span class="key-cap">E</span>
+      <span id="interact-text">交互</span>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-box"></div>
+
+    <!-- Bottom Stardew Hotbar -->
+    <nav id="hotbar-wrap">
+      <div id="hotbar-label">锄头 · 翻开雪地耕土</div>
+      <div id="hotbar" class="sdv-panel"></div>
+    </nav>
+
+    <!-- Mobile Touch Controls: Left Analog Thumbstick Wheel + Right Minecraft-Style Action Buttons -->
+    <div id="touch-controls" aria-label="移动端触控操作">
+      <!-- Left Virtual Joystick Wheel (360° analog walk + outer-ring sprint) -->
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <span class="joy-pip n"></span>
+          <span class="joy-pip s"></span>
+          <span class="joy-pip w"></span>
+          <span class="joy-pip e"></span>
+          <div id="joystick-knob"></div>
+        </div>
+        <div id="joystick-sprint-tag">冲刺</div>
+      </div>
+
+      <!-- Right Action Pad (Primary Context Interact + Tool Use + Camera Reset) -->
+      <div id="touch-action-pad">
+        <button id="btn-touch-cam-reset" type="button" class="touch-mini-btn" title="视角复位">↺</button>
+        <button id="btn-touch-action" type="button" class="touch-circle-btn tool-btn" title="使用当前工具/耕作">
+          <span class="touch-btn-ico" id="touch-action-ico">⛏</span>
+          <span class="touch-btn-txt" id="touch-action-txt">耕作</span>
+        </button>
+        <button id="btn-touch-interact" type="button" class="touch-circle-btn interact-btn hidden" title="互动">
+          <span class="touch-btn-ico" id="touch-interact-ico">✋</span>
+          <span class="touch-btn-txt" id="touch-interact-txt">互动</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Birthday Checklist (Stardew-style journal quest log) -->
+    <section id="bday-quest" class="sdv-panel hidden">
+      <button id="bday-quest-head" type="button" class="bday-quest-head">
+        <span>生日清单</span>
+        <span id="bday-quest-count" class="bday-quest-count">0 / 4</span>
+      </button>
+      <ul id="bday-quest-list" class="bday-quest-list"></ul>
+    </section>
+
+
+    <!-- Big golden birthday banner -->
+    <div id="bday-banner" class="hidden">
+      <div class="bday-banner-main" id="bday-banner-main">生日快乐</div>
+      <div class="bday-banner-sub" id="bday-banner-sub"></div>
+    </div>
+
+    <!-- Wish overlay (blow out the candles) -->
+    <div id="wish-overlay" class="hidden">
+      <div class="wish-text" id="wish-text">闭上眼睛，许一个愿望吧……</div>
+      <div class="wish-bar"><div class="wish-bar-fill" id="wish-bar-fill"></div></div>
+      <div class="wish-hint" id="wish-hint">按住 空格 / 屏幕 许愿，松开吹灭蜡烛</div>
+    </div>
+
+    <!-- Stardew-style dialogue box -->
+    <div id="dialogue-box" class="hidden">
+      <div class="dialogue-frame sdv-panel">
+        <div class="dialogue-text" id="dialogue-text"></div>
+        <div class="dialogue-portrait">
+          <div class="dialogue-portrait-img" id="dialogue-portrait"></div>
+          <div class="dialogue-name" id="dialogue-name"></div>
+        </div>
+        <div class="dialogue-next" id="dialogue-next">▼</div>
+      </div>
+    </div>
+
+    <!-- Phone held upright: ask to rotate (game is landscape-only on phones) -->
+    <div id="rotate-hint">
+      <div class="rotate-card sdv-panel">
+        <div class="rotate-phone"><span>🏡</span></div>
+        <div class="rotate-title">请把手机横过来</div>
+        <div class="rotate-sub">冬麓小屋需要横屏游玩<br />记得关闭「竖排方向锁定」哦</div>
+      </div>
+    </div>
+
+    <!-- Title screen -->
+    <div id="title-screen" class="hidden">
+      <div class="title-snow"></div>
+      <div class="title-card">
+        <div class="title-main" id="title-main">冬麓</div>
+        <div class="title-sub" id="title-sub">送给你的生日礼物</div>
+        <button id="btn-title-start" type="button" class="title-start-btn">▶ 推开冬麓的门</button>
+        <div class="title-tip">建议戴上耳机 · 打开声音</div>
+      </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="hidden">
+      <div class="sdv-panel help-card">
+        <div class="panel-header">
+          <span class="panel-title">冬麓 · 玩法指南</span>
+          <button id="btn-close-help" class="mini-btn">✕</button>
+        </div>
+        <ul class="help-list">
+          <li><b>电脑端操作</b>：<b>WASD / 方向键</b>移动（<b>Shift</b> 小跑）、<b>左键 / 空格</b>耕作、<b>E 键</b>互动、<b>1–8</b> 切工具、<b>右键自由拖动</b> 360° 环视与上下俯仰看雪山落日、<b>滚轮</b>缩放、<b>R</b> 复位、<b>H</b> 纯净拍照模式</li>
+          <li><b>手机端触控</b>：<b>左下角虚拟轮盘</b> 360° 移动（推到外圈自动冲刺）；<b>单指直接点选</b>菜田、木门、动物、礼物盒、火漆信或 Claude 小螃蟹交互；<b>单指滑动空白处</b>旋转视角、<b>双指捏合</b>缩放；也可点<b>右下角圆键</b>耕作与互动</li>
+          <li><b>户外农场</b>：西侧菜田翻地/播种/浇水/收获；东侧牧场喂养小奶牛/绵羊/母鸡并收集鲜奶/羊毛/鸡蛋；石水井打水、出货箱卖货、摇松树捡柴火、过拱桥找篝火边的 <b>Claude 小螃蟹</b> 互动</li>
+          <li><b>精致小屋室内</b>：四面全景大窗实时渲染窗外雪林与飘雪；<b>点选右窗下礼物盒堆</b>拆开纪念画册（支持左右滑动翻页）、<b>走近书桌点选火漆信</b>拆开阅读、<b>餐桌上的生日蛋糕</b>可以许愿吹蜡烛，还可撸橘猫、品热可可、灶台烹饪、上床睡到第二天</li>
+        </ul>
+        <div class="help-actions">
+          <button id="btn-replay-birthday" class="sdv-btn accent" type="button">重新开始生日之旅</button>
+          <button id="btn-replay-fireworks" class="sdv-btn hidden" type="button">再放一次烟花</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gift Box Photo Gallery Modal -->
+    <div id="gift-modal" class="hidden">
+      <div class="sdv-panel gift-card">
+        <div class="panel-header">
+          <span class="panel-title">冬日礼物盒 · 惊喜画册 <span id="gift-counter" class="gift-counter">1 / 5</span></span>
+          <button id="btn-close-gift" class="mini-btn" title="关闭">✕</button>
+        </div>
+        <div class="gift-stage">
+          <button id="btn-gift-prev" class="gift-nav-btn" title="上一张">◀</button>
+          <div class="gift-polaroid">
+            <div class="gift-img-wrap">
+              <img id="gift-main-img" alt="礼物图片" />
+              <button id="gift-wrap-cover" type="button" class="gift-wrap-cover hidden">
+                <span class="gift-wrap-bow">🎀</span>
+                <span class="gift-wrap-tip">点一下，撕开包装纸</span>
+              </button>
+            </div>
+            <div class="gift-meta">
+              <div class="gift-meta-top">
+                <strong id="gift-title">冬麓初见</strong>
+                <span id="gift-date" class="gift-date-tag">冬日纪念 · 01</span>
+              </div>
+              <p id="gift-caption"></p>
+            </div>
+          </div>
+          <button id="btn-gift-next" class="gift-nav-btn" title="下一张">▶</button>
+        </div>
+        <div id="gift-thumbs" class="gift-thumbs"></div>
+      </div>
+    </div>
+
+    <!-- Mailbox letter (daily post) -->
+    <div id="mail-modal" class="hidden">
+      <div class="mail-paper">
+        <div class="mail-stamp"><span>冬麓</span></div>
+        <div class="mail-title" id="mail-title"></div>
+        <div class="mail-body" id="mail-body"></div>
+        <div class="mail-sign" id="mail-sign"></div>
+        <div class="mail-hint">点击任意处收好这封信</div>
+      </div>
+    </div>
+
+    <!-- Wax-Sealed Letter Modal -->
+    <div id="letter-modal" class="hidden">
+      <div class="sdv-panel letter-card">
+        <div class="panel-header">
+          <span class="panel-title"><span id="letter-title">书桌上的火漆信</span> <span id="letter-counter" class="gift-counter hidden">1 / 1</span></span>
+          <button id="btn-close-letter" class="mini-btn" title="收起信件">✕</button>
+        </div>
+
+        <!-- Envelope opening stage (first time only) -->
+        <div id="letter-envelope" class="letter-envelope hidden">
+          <div class="env-body">
+            <div class="env-flap"></div>
+            <div class="env-paper"></div>
+            <div class="env-front"></div>
+            <button id="env-seal" type="button" class="env-seal" title="拆开火漆">✦</button>
+          </div>
+          <div class="env-tip">点一下火漆印，拆开这封信</div>
+        </div>
+
+        <div id="letter-reader" class="letter-reader">
+          <div class="letter-stage">
+            <button id="btn-letter-prev" class="gift-nav-btn" title="上一页">◀</button>
+            <div class="letter-sheet-wrap" id="letter-sheet-wrap">
+              <img id="letter-img" alt="冬日来信" />
+            </div>
+            <button id="btn-letter-next" class="gift-nav-btn" title="下一页">▶</button>
+          </div>
+          <div id="letter-sub" class="letter-sub"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
