@@ -145,11 +145,43 @@ const HAZE_FRAGMENT = /* glsl */ `
   }
 `;
 
-// Inject distance + altitude aware haze into a built-in material (replaces linear scene fog)
-export function applyAerialHaze(material, hazeUniforms, { sparkle = false } = {}) {
+// Painted-backdrop look for the distant ranges: chunky world-space "pixels" with a little
+// value grain, and the haze stepped into a few dithered bands (like a hand-painted pixel-art
+// backdrop) instead of a smooth airbrushed gradient.
+const PIXEL_BACKDROP_FRAGMENT = /* glsl */ `
+  {
+    float pxAng = atan(vHazeWorld.z, vHazeWorld.x) * length(vHazeWorld.xz);
+    vec2 pxCell = floor(vec2(pxAng, vHazeWorld.y) / uPixelCell);
+    float pxGrain = hzHash(pxCell) - 0.5;
+    gl_FragColor.rgb *= 1.0 + pxGrain * uPixelGrain;
+    vec3 hzToFrag = vHazeWorld - cameraPosition;
+    float hzDist = length(hzToFrag);
+    vec3 hzDir = hzToFrag / max(hzDist, 1e-3);
+    float hzAmt = 1.0 - exp(-max(hzDist - uHazeStart, 0.0) / uHazeScale);
+    float hzAlt = exp(-max(vHazeWorld.y, 0.0) * uHazeFalloff);
+    hzAmt *= mix(0.52, 1.0, hzAlt) * uHazeMax;
+    float pxDither = hzHash(pxCell + vec2(17.3, 5.1)) - 0.5;
+    hzAmt = floor(hzAmt * uPixelBands + 0.5 + pxDither * 0.85) / uPixelBands;
+    float hzSun = pow(max(dot(hzDir, uHazeSunDir), 0.0), 5.0);
+    vec3 hzCol = mix(uHazeTop, uHazeColor, clamp(floor(hzAlt * 1.25 * 5.0 + 0.5) / 5.0, 0.0, 1.0)) + uSunTint * hzSun;
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, hzCol, clamp(hzAmt, 0.0, 0.97));
+  }
+`;
+
+// Inject distance + altitude aware haze into a built-in material (replaces linear scene fog).
+// pixel: { cell, grain, bands } switches on the painted pixel-art backdrop look (distant ranges only).
+export function applyAerialHaze(material, hazeUniforms, { sparkle = false, pixel = null } = {}) {
   material.fog = false;
+  const pixelUniforms = pixel
+    ? {
+        uPixelCell: { value: pixel.cell ?? 1.0 },
+        uPixelGrain: { value: pixel.grain ?? 0.1 },
+        uPixelBands: { value: pixel.bands ?? 7 },
+      }
+    : null;
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, hazeUniforms);
+    if (pixelUniforms) Object.assign(shader.uniforms, pixelUniforms);
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vHazeWorld;")
       .replace(
@@ -174,6 +206,9 @@ export function applyAerialHaze(material, hazeUniforms, { sparkle = false } = {}
       uniform float uHazeMax;
       uniform float uHazeFalloff;
       uniform float uSparkle;
+      uniform float uPixelCell;
+      uniform float uPixelGrain;
+      uniform float uPixelBands;
       float hzHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`
     );
     if (sparkle) {
@@ -191,9 +226,9 @@ export function applyAerialHaze(material, hazeUniforms, { sparkle = false } = {}
         }`
       );
     }
-    shader.fragmentShader = frag.replace("#include <fog_fragment>", HAZE_FRAGMENT);
+    shader.fragmentShader = frag.replace("#include <fog_fragment>", pixelUniforms ? PIXEL_BACKDROP_FRAGMENT : HAZE_FRAGMENT);
   };
-  material.customProgramCacheKey = () => (sparkle ? "aerial-haze-sparkle" : "aerial-haze");
+  material.customProgramCacheKey = () => (pixelUniforms ? "aerial-haze-pixel" : sparkle ? "aerial-haze-sparkle" : "aerial-haze");
   return material;
 }
 
@@ -385,7 +420,7 @@ export class AlpineLandscape {
       {
         name: "far-peaks", seed: 11.3, r0: 112, r1: 162, angSegs: Math.round(230 * m), radSegs: Math.round(15 * m),
         base: 10, amp: 31, sharp: 1.3, scale: 0.019, octaves: 4, skew: 0.62, dirMin: 0.5,
-        snowline: 0.16, rock: [0x353c4d, 0x434859, 0x4f4c58], forestBand: 0,
+        snowline: 0.16, rock: [0x353c4d, 0x434859, 0x4f4c58], forestBand: 0, pixel: { cell: 1.7, grain: 0.09, bands: 6 },
         peaks: [
           { a: -Math.PI / 2 - 0.12, t: 0.32, w: 0.06, h: 14 },
           { a: -Math.PI / 2 + 0.42, t: 0.4, w: 0.05, h: 11 },
@@ -397,7 +432,7 @@ export class AlpineLandscape {
       {
         name: "mid-ridges", seed: 47.9, r0: 84, r1: 122, angSegs: Math.round(210 * m), radSegs: Math.round(12 * m),
         base: 5.5, amp: 18, sharp: 1.2, scale: 0.027, octaves: 4, skew: 0.7, dirMin: 0.58,
-        snowline: 0.26, rock: [0x323a4c, 0x3e4558, 0x48475a], forestBand: 0.12,
+        snowline: 0.26, rock: [0x323a4c, 0x3e4558, 0x48475a], forestBand: 0.12, pixel: { cell: 1.2, grain: 0.1, bands: 7 },
         peaks: [
           { a: -Math.PI / 2 + 0.95, t: 0.4, w: 0.06, h: 6 },
           { a: -Math.PI / 2 - 1.05, t: 0.42, w: 0.07, h: 5 },
@@ -406,7 +441,7 @@ export class AlpineLandscape {
       {
         name: "near-foothills", seed: 93.1, r0: 60, r1: 92, angSegs: Math.round(180 * m), radSegs: Math.round(9 * m),
         base: 3.8, amp: 9.5, sharp: 1.0, scale: 0.032, octaves: 3, skew: 0.8, dirMin: 0.7,
-        snowline: 0.0, rock: [0x4a5162, 0x585a66, 0x5d5a5c], forestBand: 0.42,
+        snowline: 0.0, rock: [0x4a5162, 0x585a66, 0x5d5a5c], forestBand: 0.42, pixel: { cell: 0.8, grain: 0.1, bands: 8 },
       },
     ];
 
@@ -509,7 +544,8 @@ export class AlpineLandscape {
 
     const mat = applyAerialHaze(
       new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.93, metalness: 0 }),
-      this.haze
+      this.haze,
+      { pixel: spec.pixel }
     );
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = spec.name;

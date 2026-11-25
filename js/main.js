@@ -83,7 +83,21 @@ class WinterfootGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // Stardew-style grade: same ACES curve and exposure as before, then a gentle saturation lift
+    // and warm midtones so wood, crops and lantern light read rich instead of washed out.
+    // Near-white snow barely moves, so the winter palette stays crisp.
+    THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+      "vec3 CustomToneMapping( vec3 color ) { return color; }",
+      `vec3 CustomToneMapping( vec3 color ) {
+        vec3 c = ACESFilmicToneMapping( color );
+        float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+        c = mix( vec3( l ), c, 1.2 );
+        float mid = l * ( 1.0 - l ) * 4.0;
+        c *= mix( vec3( 1.0 ), vec3( 1.035, 1.0, 0.95 ), mid * 0.6 );
+        return saturate( c );
+      }`
+    );
+    this.renderer.toneMapping = THREE.CustomToneMapping;
     this.renderer.toneMappingExposure = 1.12;
 
     this.scene = new THREE.Scene();

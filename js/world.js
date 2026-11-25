@@ -75,7 +75,154 @@ export class OutdoorWorld {
     // surface height, update and interactions (see the interface note in zoneSouth.js).
     this.zones = [new SouthLakeZone(this, this.textures), new NorthSpringZone(this, this.textures)];
 
+    this._buildGroundDetails();
     this._collectSnowCaps();
+  }
+
+  // Little Stardew-style ground clutter poking through the snow: dry grass tufts, pebbles,
+  // fallen twigs and a few holly sprigs. Purely decorative (no colliders), kept off the
+  // walkways, buildings, garden beds, paddock, brook and campfire.
+  _buildGroundDetails() {
+    const rnd = createMulberry(2468);
+    const R = YARD_RECT;
+    const isClear = (x, z, pad) => {
+      if (x < R.minX + 0.6 || x > R.maxX - 0.6 || z < R.minZ + 0.6 || z > R.maxZ - 0.6) return false;
+      for (const c of this.colliders) {
+        if (c.type === "box") {
+          if (x > c.minX - pad && x < c.maxX + pad && z > c.minZ - pad && z < c.maxZ + pad) return false;
+        } else if (Math.hypot(x - c.x, z - c.z) < c.r + pad) return false;
+      }
+      for (const b of this.pathBoxes || []) {
+        if (x > b.minX - 0.3 && x < b.maxX + 0.3 && z > b.minZ - 0.3 && z < b.maxZ + 0.3) return false;
+      }
+      if (x > -9.6 && x < 0.0 && z > -0.4 && z < 6.7) return false; // vegetable garden beds + fence
+      const p = this.paddockBounds;
+      if (x > p.minX - 0.5 && x < p.maxX + 0.5 && z > p.minZ - 0.5 && z < p.maxZ + 0.5) return false;
+      if (Math.abs(x - riverCenterX(z)) < RIVER.yardHalfWidth + 1.5) return false;
+      if (Math.hypot(x - this.campfirePos.x, z - this.campfirePos.z) < 2.4) return false;
+      if (Math.hypot(x - this.wellPos.x, z - this.wellPos.z) < 1.4) return false;
+      if (x > -6.5 && x < 4.8 && z > -11.6 && z < -3.0) return false; // cottage, porch & steps
+      return true;
+    };
+    const pick = (count, pad, tries = 40) => {
+      const out = [];
+      for (let i = 0; i < count; i++) {
+        for (let t = 0; t < tries; t++) {
+          const x = R.minX + rnd() * (R.maxX - R.minX);
+          const z = R.minZ + rnd() * (R.maxZ - R.minZ);
+          if (!isClear(x, z, pad)) continue;
+          if (out.some((o) => Math.hypot(o.x - x, o.z - z) < 0.55)) continue;
+          out.push({ x, z });
+          break;
+        }
+      }
+      return out;
+    };
+    // Merge a few boxes (non-indexed) into one geometry for instancing
+    const mergeBoxes = (parts) => {
+      const pos = [];
+      const nor = [];
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const e = new THREE.Euler();
+      for (const pt of parts) {
+        const g = new THREE.BoxGeometry(pt.w, pt.h, pt.d).toNonIndexed();
+        e.set(pt.rx || 0, pt.ry || 0, pt.rz || 0);
+        m.compose(new THREE.Vector3(pt.x || 0, (pt.y ?? pt.h / 2), pt.z || 0), q.setFromEuler(e), new THREE.Vector3(1, 1, 1));
+        g.applyMatrix4(m);
+        pos.push(...g.attributes.position.array);
+        nor.push(...g.attributes.normal.array);
+        g.dispose();
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+      geo.computeBoundingSphere();
+      return geo;
+    };
+    const scatter = (geo, mat, spots, palette, scaleMin, scaleMax, yOff = 0) => {
+      if (!spots.length) return null;
+      const im = new THREE.InstancedMesh(geo, mat, spots.length);
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const up = new THREE.Vector3(0, 1, 0);
+      const col = new THREE.Color();
+      spots.forEach((sp, i) => {
+        const s = scaleMin + rnd() * (scaleMax - scaleMin);
+        q.setFromAxisAngle(up, rnd() * Math.PI * 2);
+        m.compose(new THREE.Vector3(sp.x, yOff, sp.z), q, new THREE.Vector3(s, s * (0.85 + rnd() * 0.3), s));
+        im.setMatrixAt(i, m);
+        im.setColorAt(i, col.setHex(palette[Math.floor(rnd() * palette.length)]));
+      });
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.receiveShadow = true;
+      im.castShadow = false;
+      im.name = "ground-detail";
+      this.group.add(im);
+      return im;
+    };
+    const k = this.isMobile ? 0.55 : 1;
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, flatShading: true });
+
+    // Dry grass tufts: a fan of chunky blades in straw, olive and faded green
+    const tuftGeo = mergeBoxes([
+      { w: 0.05, h: 0.26, d: 0.05, rz: 0.05 },
+      { w: 0.05, h: 0.2, d: 0.05, x: 0.06, rz: -0.45 },
+      { w: 0.05, h: 0.21, d: 0.05, x: -0.06, rz: 0.45 },
+      { w: 0.05, h: 0.17, d: 0.05, z: 0.06, rx: 0.45 },
+      { w: 0.05, h: 0.16, d: 0.05, z: -0.06, rx: -0.45 },
+    ]);
+    scatter(tuftGeo, mat, pick(Math.round(110 * k), 0.35), [0xc9a65a, 0xb48f45, 0x8d9248, 0x6f8a46, 0xd8bf74], 0.8, 1.35, -0.02);
+
+    // Pebbles: squat faceted stones in cool greys with a warm one here and there
+    const pebbleGeo = new THREE.DodecahedronGeometry(0.1, 0);
+    pebbleGeo.scale(1.25, 0.6, 1.0);
+    pebbleGeo.translate(0, 0.03, 0);
+    scatter(pebbleGeo, mat, pick(Math.round(55 * k), 0.3), [0x8a8f98, 0x9da1a8, 0x767b85, 0xa69a8a, 0x6c7079], 0.7, 1.6);
+
+    // Fallen twigs: a forked stick lying in the snow
+    const twigGeo = mergeBoxes([
+      { w: 0.5, h: 0.035, d: 0.035, y: 0.02 },
+      { w: 0.2, h: 0.03, d: 0.03, x: 0.1, y: 0.02, z: 0.06, ry: -0.6 },
+    ]);
+    scatter(twigGeo, mat, pick(Math.round(26 * k), 0.4), [0x6b4a2f, 0x5a3d27, 0x7a5636], 0.8, 1.2);
+
+    // Holly sprigs: dark leaves with red berries, a dash of Stardew winter colour
+    const hollyLeaves = mergeBoxes([
+      { w: 0.16, h: 0.04, d: 0.08, y: 0.05, ry: 0.4, rz: 0.3 },
+      { w: 0.16, h: 0.04, d: 0.08, y: 0.05, ry: -0.9, rz: -0.3 },
+      { w: 0.15, h: 0.04, d: 0.08, y: 0.07, ry: 2.0, rx: 0.3 },
+    ]);
+    const hollyBerries = mergeBoxes([
+      { w: 0.05, h: 0.05, d: 0.05, y: 0.09 },
+      { w: 0.05, h: 0.05, d: 0.05, x: 0.05, y: 0.08, z: 0.02 },
+      { w: 0.045, h: 0.045, d: 0.045, x: -0.02, y: 0.08, z: 0.05 },
+    ]);
+    const hollySpots = pick(Math.round(14 * k), 0.4);
+    const hollyRnd = createMulberry(97531);
+    // same transforms for leaves & berries so they stay together
+    const savedState = hollySpots.map(() => ({ s: 0.9 + hollyRnd() * 0.5, r: hollyRnd() * Math.PI * 2 }));
+    const placeHolly = (geo, color) => {
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.7, flatShading: true }), Math.max(1, hollySpots.length));
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      hollySpots.forEach((sp, i) => {
+        const st = savedState[i];
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), st.r);
+        m.compose(new THREE.Vector3(sp.x, 0, sp.z), q, new THREE.Vector3(st.s, st.s, st.s));
+        im.setMatrixAt(i, m);
+      });
+      im.count = hollySpots.length;
+      im.instanceMatrix.needsUpdate = true;
+      im.receiveShadow = true;
+      im.name = "ground-detail-holly";
+      this.group.add(im);
+    };
+    if (hollySpots.length) {
+      placeHolly(hollyLeaves, 0x2f5a3a);
+      placeHolly(hollyBerries, 0xd23a32);
+    }
   }
 
   // Every flat snow cushion (roof, rails, posts, bough caps, banks...) can thicken in heavy snow
@@ -333,6 +480,7 @@ export class OutdoorWorld {
     this.paverMaterials = paverPalette;
 
     const placedBoxes = [];
+    this.pathBoxes = placedBoxes; // walkway footprint, also kept clear by _buildGroundDetails
     const addAshlarPaver = (cx, cz, w, d, geo, rotY = 0) => {
       // Keep strictly clear of porch steps, bridge stone abutments, and stone well
       if (cx > -1.85 && cx < 0.25 && cz < -3.02 && cz > -3.72) return;
