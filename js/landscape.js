@@ -8,6 +8,7 @@ import {
   riverDistance,
   riverCarveStrength,
 } from "./river.js";
+import { zoneFlatWeight, zonesSd } from "./zones.js";
 
 /* ------------------------------------------------------------------
  * 冬麓远景：360° 程序化雪山 + 起伏雪丘 + 远处松林 + 山腰云带
@@ -234,7 +235,21 @@ export class AlpineLandscape {
     const n = this.noise.fbm(x * 0.028 + 3.1, z * 0.028 - 1.7, 4);
     const lump = this.noiseB.fbm(x * 0.09, z * 0.09, 2) * 0.45;
     const h = t * t * (3.2 + n * 3.6) + t * lump + t * t * t * 5.5;
-    return this._carveRiverValley(h, x, z, 0.55, 0.16);
+    const carved = this._carveRiverValley(h, x, z, 0.55, 0.16);
+    // Flatten the trails, lake shore, hot spring & stargazing platform (zones.js) down to the yard level.
+    // Done after the river carve, so the raised upstream river banks can't creep back over a zone,
+    // but never right at the river itself (its ice would be left hanging in the air).
+    let flat = zoneFlatWeight(x, z);
+    if (flat > 0) {
+      const strength = riverCarveStrength(z);
+      if (strength > 0) {
+        const d = riverDistance(x, z);
+        const W = riverValleyFloorHalf(z);
+        flat *= 1 - strength * (1 - smooth(W + 0.5, W + 4.0, d));
+      }
+      return carved * (1 - flat);
+    }
+    return carved;
   }
 
   // Cut a flat-floored valley along the river so the water never has to climb a hill:
@@ -660,6 +675,13 @@ export class AlpineLandscape {
       // Keep an open snowy meadow behind the cabin so the alpine panorama stays readable
       const behindCabin = z < 0 && Math.abs(x) < 0.62 * -z;
       if (behindCabin && r < 50 && rnd() < 0.82) continue;
+      // Keep the walkable trails & zones (and a little room around them) clear; thin the next ring
+      const zd = zonesSd(x, z);
+      if (zd < 3.5) continue;
+      // The default camera looks north from ~20 m south of the player: keep a band south of
+      // every zone clear too, so tall pines never stand between the camera and the player
+      if (zonesSd(x, z - 10) < 2.5) continue;
+      if (zd < 8 && rnd() < 0.55) continue;
       // No trees on the frozen river or its flat valley floor; thinner on the first bank
       const rd = riverDistance(x, z);
       const rw = riverValleyFloorHalf(z);

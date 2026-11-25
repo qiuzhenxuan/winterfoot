@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { makeSnowDriftGeometry } from "./landscape.js";
 import { riverCenterX, RIVER } from "./river.js";
+import { YARD_RECT, projectToWalkable } from "./zones.js";
+import { SouthLakeZone } from "./zoneSouth.js";
+import { NorthSpringZone } from "./zoneNorth.js";
 
 function createMulberry(seed) {
   let a = seed >>> 0;
@@ -14,9 +17,10 @@ function createMulberry(seed) {
 }
 
 export class OutdoorWorld {
-  constructor(scene, textures) {
+  constructor(scene, textures, options = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.isMobile = !!options.isMobile; // zone modules use this to trim detail on phones
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
@@ -54,7 +58,8 @@ export class OutdoorWorld {
     this.bridgePlanks = []; // { mesh, x, baseY, flex } for physical plank deflection under footsteps!
     this.bridgeSpec = { minX: 9.75, maxX: 14.25, centerZ: 3.05, halfW: 1.06, archHeight: 0.66 };
 
-    this.bounds = { minX: -17.0, maxX: 19.6, minZ: -13.6, maxZ: 14.2 };
+    // Yard rectangle: animals & rabbits stay inside it. The player can also walk the trails & zones (zones.js).
+    this.bounds = { ...YARD_RECT };
 
     this._buildTerrainAndPaths();
     this._buildFrozenBrookAndBridge();
@@ -65,6 +70,11 @@ export class OutdoorWorld {
     this._buildCampfireGlade();
     this._buildForest();
     this._spawnInitialFirewood();
+
+    // Areas beyond the yard. Each zone module builds into this.group and plugs into
+    // surface height, update and interactions (see the interface note in zoneSouth.js).
+    this.zones = [new SouthLakeZone(this, this.textures), new NorthSpringZone(this, this.textures)];
+
     this._collectSnowCaps();
   }
 
@@ -145,6 +155,12 @@ export class OutdoorWorld {
 
   // True 3D walkable surface elevation & material query (arched bridge deck + cottage porch & steps!)
   getSurfaceInfo(x, z) {
+    if (this.zones) {
+      for (const zn of this.zones) {
+        const info = zn.getSurface ? zn.getSurface(x, z) : null;
+        if (info) return { slopeX: 0, onBridge: false, ...info };
+      }
+    }
     const b = this.bridgeSpec;
     if (x >= b.minX && x <= b.maxX && Math.abs(z - b.centerZ) <= b.halfW + 0.06) {
       return {
@@ -167,12 +183,26 @@ export class OutdoorWorld {
       }
     }
 
+    // Outside the yard the player walks on the real terrain (zones are flat, but their far edges
+    // can meet a gentle bank); main.js hands us the landscape after it is built
+    if (this.landscape && (x < this.bounds.minX || x > this.bounds.maxX || z < this.bounds.minZ || z > this.bounds.maxZ)) {
+      return { y: Math.max(0, this.landscape.valleyHeight(x, z)), surface: "snow", slopeX: 0, onBridge: false };
+    }
     return { y: 0, surface: "snow", slopeX: 0, onBridge: false };
   }
 
-  resolveMovement(x, z, radius = 0.36) {
-    let nx = THREE.MathUtils.clamp(x, this.bounds.minX, this.bounds.maxX);
-    let nz = THREE.MathUtils.clamp(z, this.bounds.minZ, this.bounds.maxZ);
+  // walkZones: the player may leave the yard along the trails (zones.js); animals stay in the yard rectangle
+  resolveMovement(x, z, radius = 0.36, walkZones = false) {
+    let nx;
+    let nz;
+    if (walkZones) {
+      const p = projectToWalkable(x, z);
+      nx = p.x;
+      nz = p.z;
+    } else {
+      nx = THREE.MathUtils.clamp(x, this.bounds.minX, this.bounds.maxX);
+      nz = THREE.MathUtils.clamp(z, this.bounds.minZ, this.bounds.maxZ);
+    }
 
     const b = this.bridgeSpec;
     // Brook bank collision ONLY applies strictly outside the bridge's North & South wooden handrails!
@@ -213,6 +243,12 @@ export class OutdoorWorld {
           nz = c.z + (dz / dist) * minDist;
         }
       }
+    }
+    // A collider near a zone edge may have pushed us outside; settle back inside
+    if (walkZones) {
+      const p = projectToWalkable(nx, nz);
+      nx = p.x;
+      nz = p.z;
     }
     return { x: nx, z: nz };
   }
@@ -2389,14 +2425,14 @@ export class OutdoorWorld {
     // Curated forest ring framing the elongated cabin, west garden, east animal paddock, brook & glade!
     const treeSpecs = [
       // North backdrop behind elongated cabin
-      [-12.8, -11.6, 1.32], [-9.2, -12.2, 1.2], [-5.2, -12.6, 1.35], [-1.0, -12.8, 1.25],
+      [-12.8, -11.6, 1.32], [-11.0, -12.6, 1.2], [-4.6, -12.9, 1.35], [-1.0, -12.8, 1.25],
       [3.5, -12.4, 1.28], [7.8, -11.4, 1.22], [14.0, -7.4, 1.1], [14.8, -10.0, 1.28], [17.8, -8.5, 1.34],
       [-15.6, -8.8, 1.38], [-11.0, -8.4, 1.12], [6.6, -8.2, 1.12], [8.3, -6.7, 1.02],
       // West woods
       [-13.8, -4.8, 1.24], [-11.4, -3.5, 1.04], [-15.0, -0.6, 1.32], [-12.0, 0.8, 1.1],
       [-13.6, 4.4, 1.22], [-11.4, 6.2, 0.98], [-14.8, 8.2, 1.3], [-11.5, 10.2, 1.14],
       // South woods (clear sightlines to shifted vegetable garden & animal paddock!)
-      [-8.4, 10.8, 1.05], [-6.2, 12.6, 1.22], [-1.6, 10.8, 1.02], [2.2, 11.4, 1.12],
+      [-8.4, 10.8, 1.05], [-7.9, 13.6, 1.22], [-1.6, 10.8, 1.02], [2.2, 11.4, 1.12],
       [6.4, 10.4, 1.06], [9.4, 9.8, 1.04], [14.6, 9.8, 1.18], [17.6, 8.8, 1.24],
       // East Pine Glade trees around campfire (kept cleanly clear of south sightlines to bridge & Claude crab!)
       [15.0, -4.6, 1.08], [17.8, -3.4, 1.25], [19.0, 0.6, 1.2], [19.5, 6.8, 1.15],
@@ -2769,6 +2805,10 @@ export class OutdoorWorld {
     for (const item of this.droppedItems) {
       item.mesh.position.y = 0.2 + Math.sin(elapsed * 3.0 + item.bobPhase) * 0.05;
       item.mesh.rotation.y += dt * 0.8;
+    }
+
+    if (this.zones) {
+      for (const zn of this.zones) zn.update?.(dt, elapsed, nightFactor, playerPos, lampGlow);
     }
 
     // Burst particles

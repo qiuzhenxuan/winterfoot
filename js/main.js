@@ -11,6 +11,7 @@ import { GameUI } from "./ui.js";
 import { GIFT_GALLERY_ITEMS, LETTER_CONTENT, BIRTHDAY, MAILBOX_LETTERS, ANIMAL_BLESSINGS, fillBirthdayText } from "./giftConfig.js";
 import { WorldFireworks } from "./worldFireworks.js";
 import { EmoteSystem } from "./emotes.js";
+import { zoneNameAt } from "./zones.js";
 
 const BDAY_STORAGE_KEY = "winterfootBirthday.v1";
 const SAVE_KEY = "winterfootSave.v1";
@@ -105,9 +106,10 @@ class WinterfootGame {
     this.textures = createTextureLibrary(maxAniso);
     this.sound = new SoundEngine();
     this.atmosphere = new AtmosphereSystem(this.scene, this.textures, { isMobilePerf: this.isMobileDevice });
-    this.world = new OutdoorWorld(this.scene, this.textures);
+    this.world = new OutdoorWorld(this.scene, this.textures, { isMobile: this.isMobileDevice });
     // 360° procedural alpine ranges (visible through cabin windows too) + rolling valley hills & distant pine belt
     this.landscape = new AlpineLandscape(this.world.group, this.scene, this.textures, { isMobile: this.isMobileDevice });
+    this.world.landscape = this.landscape;
     this.farm = new FarmSystem(this.scene, this.textures, this.world);
     this.player = new PlayerCharacter(this.scene);
     this.wildlife = new WildlifeSystem(this.scene, this.world);
@@ -347,6 +349,13 @@ class WinterfootGame {
         };
       },
       setTime: (h) => this.atmosphere.setTime(h),
+      // Jump the player (outdoors) for testing the trail zones, e.g. teleport(-9, 33)
+      teleport: (x, z) => {
+        this.player.position.set(x, this.world.getSurfaceInfo(x, z).y, z);
+        this.camFocus.set(x, 0.95, z);
+        return { place: this._currentLocationName(), walkable: this.world.resolveMovement(x, z, 0.36, true) };
+      },
+      getInteract: () => (this.activeInteract ? { type: this.activeInteract.type, id: this.activeInteract.id, label: this.activeInteract.label } : null),
       playWishFireworks: () => this._startWishFireworks(),
       shootingStar: () => this.worldFireworks.shootingStar(),
       testShell: (kind) => this.worldFireworks._launchShell({ kind, scale: 1.3 }),
@@ -932,12 +941,36 @@ class WinterfootGame {
       day: this.day,
       clockStr: this.atmosphere.getFormattedClock(),
       phaseIcon: phase.icon,
-      locationName: this.isIndoor ? "小屋室内" : "冬麓院子",
+      locationName: this._currentLocationName(),
       gold: this.gold,
       inventory: this.inventory,
       timeHours: this.atmosphere.timeHours,
     });
     this.ui.updateHotbar(this._getHotbarSlots(), this.selectedSlot, this.water / this.waterMax);
+  }
+
+  _currentLocationName() {
+    if (this.isIndoor) return "小屋室内";
+    return zoneNameAt(this.player.position.x, this.player.position.z);
+  }
+
+  // Context handed to zone modules (zoneSouth.js / zoneNorth.js) when the player interacts with them
+  _zoneCtx() {
+    return {
+      toast: (msg) => this.ui.showToast(msg),
+      popup: (x, y, z, text, color) => this._popupAt(x, y, z, text, color),
+      emote: (x, z, kind = "heart", height = 1.4, duration = 1.5) => this.emotes.show({ x, y: 0, z }, kind, height, duration),
+      bless: (x, y, z) => this._maybeBless(x, y, z),
+      sound: this.sound,
+      inventory: this.inventory,
+      refreshUI: () => this._refreshUI(),
+      burst: (x, y, z, color, count, speed) => this.world.spawnBurst(x, y, z, color, count, speed),
+      timeHours: this.atmosphere.timeHours,
+      nightFactor: this.atmosphere.nightFactor,
+      aurora: this.atmosphere.skyUniforms?.uAurora?.value ?? 0,
+      day: this.day,
+      player: this.player,
+    };
   }
 
   _projectToScreen(worldPos) {
@@ -1320,6 +1353,11 @@ class WinterfootGame {
       for (const t of this.world.shakeTrees) {
         candidates.push({ x: t.x, z: t.z, tapR: 1.2, reach: 2.55, act: { type: "shake_tree", target: t }, name: "雪松树" });
       }
+      for (const zn of this.world.zones) {
+        for (const it of zn.getInteractions(this.player.position)) {
+          candidates.push({ x: it.x, z: it.z, tapR: it.tapR ?? 1.1, reach: it.reach ?? 2.0, act: this._zoneAct(zn, it), name: it.name });
+        }
+      }
     }
 
     let best = null;
@@ -1694,6 +1732,22 @@ class WinterfootGame {
       }
     }
 
+    // 9b. Places in the trail zones (frozen lake, hot spring, stargazing platform …)
+    {
+      let bestZ = null;
+      let bestZD = Infinity;
+      for (const zn of this.world.zones) {
+        for (const it of zn.getInteractions(this.player.position)) {
+          const d = Math.hypot(px - it.x, pz - it.z);
+          if (d < (it.reach ?? 2.0) && d < bestZD) {
+            bestZD = d;
+            bestZ = this._zoneAct(zn, it);
+          }
+        }
+      }
+      if (bestZ) return bestZ;
+    }
+
     // 10. Shakeable Pine Trees
     let closestTree = null;
     let bestD = 2.15;
@@ -1748,6 +1802,7 @@ class WinterfootGame {
       case "rabbit": return at(act.target.mesh.position, 1.5);
       case "pickup_wood": return { x: act.target.x, y: 0.8, z: act.target.z };
       case "shake_tree": return { x: act.target.x, y: 1.9, z: act.target.z };
+      case "zone": return act.anchorY == null ? null : { x: act.target.x, y: act.anchorY, z: act.target.z };
       case "sleep_bed": return at(I.bedPos, 1.35);
       case "pet_cat": return at(I.catPos, 2.35);
       case "stoke_hearth": return at(I.fireplacePos, 1.25);
@@ -1758,6 +1813,18 @@ class WinterfootGame {
       // gifts, letter & lit cake already have their own floating sparkle; doors need no arrow
       default: return null;
     }
+  }
+
+  _zoneAct(zone, it) {
+    return {
+      type: "zone",
+      zone,
+      id: it.id,
+      target: { name: it.id, x: it.x, z: it.z },
+      label: it.label,
+      anchorY: it.anchorY ?? 1.6,
+      allowClick: it.allowClick ?? true,
+    };
   }
 
   _getInteractKey(act) {
@@ -1948,6 +2015,9 @@ class WinterfootGame {
         this._popupAt(this.world.wellPos.x, 1.4, this.world.wellPos.z, "水壶已装满!", "#9be2ff");
         this._refreshUI();
         break;
+      case "zone":
+        act.zone.interact(act.id, this._zoneCtx());
+        break;
       case "greet_claude": {
         this.emotes.show({ x: this.world.claudeCrabPos.x, y: 0, z: this.world.claudeCrabPos.z }, "note", 1.1);
         const msg = this.world.interactClaudeCrab();
@@ -2135,7 +2205,7 @@ class WinterfootGame {
 
       const resolved = this.isIndoor
         ? this.interior.resolveMovement(nx, nz)
-        : this.world.resolveMovement(nx, nz);
+        : this.world.resolveMovement(nx, nz, 0.36, true);
 
       this.player.position.x = resolved.x;
       this.player.position.z = resolved.z;
@@ -2315,6 +2385,14 @@ class WinterfootGame {
     if (!this.isIndoor) {
       this.canvas.style.cursor = "crosshair";
       this.world.update(dt, this.elapsed, this.atmosphere.nightFactor, this.player.position, this.atmosphere.snowLevel);
+      // Entering / leaving a trail zone updates the HUD place name (and toasts the new place once per visit)
+      const locName = this._currentLocationName();
+      if (locName !== this._lastLocName) {
+        const prev = this._lastLocName;
+        this._lastLocName = locName;
+        this._refreshUI();
+        if (prev && locName !== "冬麓院子" && locName !== "小屋室内") this.ui.showToast(`来到了「${locName}」`);
+      }
       this.farm.update(dt, this.elapsed);
       this.wildlife.update(dt, this.elapsed, this.player.position);
 
@@ -2366,6 +2444,9 @@ class WinterfootGame {
 
 const _SKY_CAM_FOCUS = new THREE.Vector3(0.6, 5.1, -3.2);
 
-window.addEventListener("DOMContentLoaded", () => {
+// giftConfig.js uses top-level await, so this module may finish evaluating after DOMContentLoaded
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", () => new WinterfootGame());
+} else {
   new WinterfootGame();
-});
+}
