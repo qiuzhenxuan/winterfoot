@@ -1441,3 +1441,63 @@ body.photo-mode #game-canvas {
   .journal-detail { min-height: 38px; font-size: 11.5px; }
   .hud-journal-btn { margin-top: 4px; padding: 2px 6px; font-size: 10.5px; }
 }
+
+/* 雪人衣橱 */
+#snowman-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 16, 28, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+  padding: 16px;
+}
+#snowman-modal.hidden { display: none; }
+.snowman-wrap { width: min(640px, 94vw); }
+.snowman-rows { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; }
+.snowman-row { display: flex; align-items: center; gap: 8px; }
+.snowman-row-title {
+  flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  letter-spacing: 3px;
+  padding: 6px 3px;
+  border-radius: 4px;
+  background: var(--wood-mid);
+  color: var(--parchment-light);
+  font-size: 12px;
+  font-weight: 800;
+}
+.snowman-cards { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.snowman-card { position: relative; padding: 4px; }
+.snowman-card .journal-art { aspect-ratio: 40 / 34; }
+.snowman-card .journal-name { font-size: 11px; }
+.snowman-card.worn { background: #fff4d6; border-color: #5c8a4a; }
+.snowman-card.worn::after {
+  content: "✓";
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #3f7a3a;
+  text-shadow: 0 1px 0 #fff;
+}
+.snowman-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.snowman-price {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: #3c1e0c;
+  font-size: 11px;
+  box-shadow: 0 1px 0 var(--wood-dark);
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .snowman-rows { gap: 4px; }
+  .snowman-card .journal-name { font-size: 10px; }
+}

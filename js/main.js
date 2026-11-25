@@ -13,6 +13,7 @@ import { WorldFireworks } from "./worldFireworks.js";
 import { EmoteSystem } from "./emotes.js";
 import { zoneNameAt } from "./zones.js";
 import { Journal } from "./journal.js";
+import { SnowmanWardrobe } from "./snowman.js";
 
 const BDAY_STORAGE_KEY = "winterfootBirthday.v1";
 const SAVE_KEY = "winterfootSave.v1";
@@ -192,9 +193,25 @@ class WinterfootGame {
           void b.offsetWidth;
           b.classList.add("pulse");
         }
+        this._checkWardrobeGifts();
         this._saveGame();
       },
       onComplete: (kind) => this._onJournalComplete(kind),
+    });
+
+    // The lake snowman's wardrobe (hats, scarves, noses)
+    const southZone = this.world.zones.find((z) => z.setSnowmanOutfit);
+    this.wardrobe = new SnowmanWardrobe({
+      getGold: () => this.gold,
+      spendGold: (n) => {
+        if (this.gold < n) return false;
+        this.gold -= n;
+        this._refreshUI();
+        return true;
+      },
+      onWear: (wear) => southZone && southZone.setSnowmanOutfit(wear),
+      onChange: () => this._saveGame(),
+      sound: this.sound,
     });
 
     // Restore the farm from the last visit (crops, gold, animals, day, weather...)
@@ -313,6 +330,7 @@ class WinterfootGame {
       onReplayFireworks: () => this._startWishFireworks(),
     });
     this.ui.journal = this.journal;
+    this.ui.wardrobe = this.wardrobe;
 
     this.ui.dayBadge = "";
     if (this.savedGame) this.ui.syncWeatherButtons(this.atmosphere.snowLevel);
@@ -527,6 +545,16 @@ class WinterfootGame {
     if (typeof sv.trough === "boolean") this.world.setTroughFilled(sv.trough);
     if (Array.isArray(sv.mailRead)) this.mailRead = sv.mailRead.slice();
     if (sv.journal) this.journal.restoreState(sv.journal);
+    if (sv.snowman) this.wardrobe.restoreState(sv.snowman);
+  }
+
+  // Journal milestones send the snowman new clothes
+  _checkWardrobeGifts() {
+    if (!this.wardrobe) return;
+    const got = this.wardrobe.checkUnlocks({ journal: this.journal });
+    if (got.length) {
+      setTimeout(() => this.ui.showToast(`✦ 雪人衣橱多了：${got.map((g) => g.name).join("、")}。去镜湖边给雪人换上吧！`), 2600);
+    }
   }
 
   // A whole page of the book filled in: a small reward and a cheer
@@ -562,6 +590,7 @@ class WinterfootGame {
         trough: !!this.world.troughFilled,
         mailRead: this.mailRead,
         journal: this.journal.getState(),
+        snowman: this.wardrobe ? this.wardrobe.getState() : undefined,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch {
@@ -1047,6 +1076,7 @@ class WinterfootGame {
       day: this.day,
       player: this.player,
       journal: this.journal,
+      wardrobe: this.wardrobe,
     };
   }
 
@@ -1128,6 +1158,24 @@ class WinterfootGame {
         if (isConfirm) {
           e.preventDefault();
           if (!e.repeat) this.ui.tryBlowWish();
+        }
+        return;
+      }
+      if (this.wardrobe.isOpen()) {
+        if (e.repeat && !e.code.startsWith("Arrow")) return;
+        const c = e.code;
+        if (c === "Escape" || c === "KeyQ") this.wardrobe.close();
+        else if (c === "ArrowLeft" || c === "KeyA") this.wardrobe.move(-1, 0);
+        else if (c === "ArrowRight" || c === "KeyD") this.wardrobe.move(1, 0);
+        else if (c === "ArrowUp" || c === "KeyW") this.wardrobe.move(0, -1);
+        else if (c === "ArrowDown" || c === "KeyS" || c === "Tab") {
+          e.preventDefault();
+          this.wardrobe.move(0, 1);
+        } else if (c === "KeyE" || c === "Enter" || c === "Space") {
+          e.preventDefault();
+          const r = this.wardrobe.activate();
+          if (r && r.kind === "buy") this.sound.questDone();
+          else if (r && r.kind === "wear") this.sound.paperRustle?.();
         }
         return;
       }

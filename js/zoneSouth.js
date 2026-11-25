@@ -23,6 +23,7 @@
 
 import * as THREE from "three";
 import { FISH, fishAvailable } from "./journal.js";
+import { buildSnowmanPiece, SNOWMAN_DEFAULT_WEAR } from "./snowman.js";
 import { makeSnowDriftGeometry } from "./landscape.js";
 import { SOUTH_TRAIL, LAKE, LAKE_SHORE } from "./zones.js";
 
@@ -95,6 +96,7 @@ const JUNK_CATCHES = [
   { name: "一片冻住的枫叶", color: "#ffb47e", text: "秋天落进湖里的枫叶，被冰保存得刚刚好，红得像一枚小小的书签。" },
   { name: "空钩", color: "#cfe3f0", empty: true, text: "鱼饵被悄悄吃光了。镜湖的鱼今天格外机灵。" },
 ];
+const TOPHAT_CATCH = { name: "一顶旧礼帽", color: "#e8d8ff", rare: true, tophat: true, text: "鱼线钩上来一顶湿漉漉的旧礼帽！拧干晾一晾，正好送给湖边的雪人。" };
 const BOTTLE_CATCH = { name: "冰里的漂流瓶", color: "#bff0ff", rare: true, text: "冰洞里漂上来一只小玻璃瓶，纸条上写着：愿你被这个世界温柔以待。" };
 
 const BENCH_DAY = [
@@ -111,7 +113,7 @@ const BENCH_NIGHT = [
   { text: "风停了，整个湖安静得能听见雪落下的声音。数着星星，心里暖暖的。" },
 ];
 const SNOWMAN_LINES = [
-  "雪人戴着歪歪的毛线帽，正望着湖面发呆。",
+  "雪人正望着湖面发呆，好像在等你帮它打扮打扮。",
   "你帮雪人把围巾理了理，它看起来更神气了。",
   "雪人手里的小树枝像一根钓竿——它大概也想去冰钓。",
 ];
@@ -216,7 +218,7 @@ export class SouthLakeZone {
       { id: "south_bench", x: BENCH.x, z: BENCH.z, name: "码头长椅", label: "坐在码头长椅上看湖", reach: 1.9, tapR: 1.0, anchorY: 1.85 },
       { id: "south_sign_head", x: SIGN_HEAD.x, z: SIGN_HEAD.z, name: "松林路牌", label: "看看木牌上写了什么", reach: 1.75, tapR: 0.8, anchorY: 2.25 },
       { id: "south_sign_lake", x: SIGN_LAKE.x, z: SIGN_LAKE.z, name: "镜湖路牌", label: "看看木牌上写了什么", reach: 1.75, tapR: 0.8, anchorY: 2.25 },
-      { id: "south_snowman", x: SNOWMAN.x, z: SNOWMAN.z, name: "湖边雪人", label: "和湖边的雪人打个招呼", reach: 1.85, tapR: 0.9, anchorY: 2.05 },
+      { id: "south_snowman", x: SNOWMAN.x, z: SNOWMAN.z, name: "湖边雪人", label: "给湖边的雪人换装扮", reach: 1.85, tapR: 0.9, anchorY: 2.05 },
     ];
     this._noInteractions = [];
   }
@@ -1643,82 +1645,91 @@ export class SouthLakeZone {
   // ===================================================================
   //  10. Shore extras: snowman in a beanie, a red sled
   // ===================================================================
+  // Swap the snowman's hat / scarf / nose for the pieces in `wear` ({hat, scarf, nose})
+  setSnowmanOutfit(wear) {
+    if (!this.snowmanSlots || !wear) return;
+    for (const slot of Object.keys(this.snowmanSlots)) {
+      const id = wear[slot];
+      if (!id || this.snowmanWear[slot] === id) continue;
+      const g = this.snowmanSlots[slot];
+      for (const ch of [...g.children]) {
+        g.remove(ch);
+        ch.traverse((o) => o.geometry && o.geometry.dispose());
+      }
+      g.add(buildSnowmanPiece(slot, id));
+      this.snowmanWear[slot] = id;
+    }
+  }
+
   _buildShoreExtras() {
-    // Snowman (yard style, smaller, knit beanie & blue scarf, holding a twig "fishing rod")
+    // Snowman: three faceted snowballs with a coal face and twig arms. His hat, scarf and
+    // nose sit in three slots the player can dress (see snowman.js).
     const sm = new THREE.Group();
     sm.position.set(SNOWMAN.x, 0, SNOWMAN.z);
     sm.rotation.y = 0.75; // looks out over the lake toward the camera side
-    const snowBody = new THREE.MeshStandardMaterial({ color: 0xf7fbff, roughness: 0.85 });
-    const parts = [
-      [0.4, 0.46, 0.64, 0.32],
-      [0.29, 0.35, 0.5, 0.86],
-      [0.22, 0.24, 0.4, 1.3],
-    ];
-    for (const [rt, rb, hh, y] of parts) {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, hh, 8), snowBody);
+    const snowBody = new THREE.MeshStandardMaterial({ color: 0xf7fbff, roughness: 0.85, flatShading: true });
+    for (const [r, y, sy] of [[0.44, 0.36, 0.86], [0.32, 0.88, 0.92], [0.23, 1.3, 1]]) {
+      const p = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), snowBody);
       p.position.y = y;
+      p.scale.set(1, sy, 1);
+      p.rotation.y = y * 2.1;
       p.castShadow = true;
       sm.add(p);
     }
-    const scarfMat = new THREE.MeshStandardMaterial({ color: 0x3f72b8, roughness: 0.9 });
-    const scarf = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.11, 8), scarfMat);
-    scarf.position.y = 1.12;
-    sm.add(scarf);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.34, 0.05), scarfMat);
-    tail.position.set(-0.16, 0.95, 0.25);
-    tail.rotation.z = 0.2;
-    sm.add(tail);
-    // Knit beanie with a pom-pom
-    const beanie = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.235, 0.22, 8), this.mat.red);
-    beanie.position.y = 1.58;
-    beanie.rotation.z = 0.12;
-    sm.add(beanie);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.245, 0.245, 0.07, 8), this.mat.cream);
-    brim.position.y = 1.49;
-    brim.rotation.z = 0.12;
-    sm.add(brim);
-    const pom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.075, 0), this.mat.cream);
-    pom.position.set(-0.04, 1.73, 0);
-    sm.add(pom);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.24, 5), new THREE.MeshStandardMaterial({ color: 0xf27a24 }));
-    nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, 1.3, 0.3);
-    sm.add(nose);
-    const coal = new THREE.MeshBasicMaterial({ color: 0x1e2028 });
-    for (const ex of [-0.085, 0.085]) {
-      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.04), coal);
-      eye.position.set(ex, 1.38, 0.21);
-      sm.add(eye);
+    const coal = new THREE.MeshStandardMaterial({ color: 0x1e2028, roughness: 0.6, flatShading: true });
+    const coalGeo = new THREE.IcosahedronGeometry(1, 0);
+    const lump = (r, x, y, z) => {
+      const m = new THREE.Mesh(coalGeo, coal);
+      m.scale.setScalar(r);
+      m.position.set(x, y, z);
+      sm.add(m);
+    };
+    for (const ex of [-0.085, 0.085]) lump(0.03, ex, 1.38, 0.207);
+    for (const [mx, my] of [[-0.09, 1.235], [-0.045, 1.215], [0, 1.21], [0.045, 1.215], [0.09, 1.235]]) {
+      const dz = Math.sqrt(Math.max(0, 0.0529 - mx * mx - (my - 1.3) * (my - 1.3)));
+      lump(0.017, mx, my, dz);
     }
-    for (const [mx, my] of [[-0.09, 1.22], [-0.03, 1.2], [0.03, 1.2], [0.09, 1.22]]) {
-      const mo = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.03), coal);
-      mo.position.set(mx, my, 0.215);
-      sm.add(mo);
-    }
-    for (const by of [0.78, 0.93]) {
-      const btn = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.04), coal);
-      btn.position.set(0, by, 0.32);
-      sm.add(btn);
-    }
-    const twigL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.05), this.mat.darkWood);
-    twigL.position.set(-0.44, 0.98, 0);
-    twigL.rotation.z = -0.35;
-    sm.add(twigL);
-    const twigR = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.05), this.mat.darkWood);
-    twigR.position.set(0.42, 1.04, 0.04);
-    twigR.rotation.z = 0.5;
-    sm.add(twigR);
+    for (const by of [0.78, 0.93]) lump(0.036, 0, by, Math.sqrt(0.1024 - (by - 0.88) * (by - 0.88)) - 0.01);
+    // twig arms: tapered sticks with a little fork
+    const twig = (len, x, y, z, rz, ry = 0) => {
+      const a = new THREE.Group();
+      a.position.set(x, y, z);
+      a.rotation.set(0, ry, rz);
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, len, 5), this.mat.darkWood);
+      stick.rotation.z = Math.PI / 2;
+      stick.position.x = len / 2;
+      a.add(stick);
+      const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.013, len * 0.32, 4), this.mat.darkWood);
+      fork.position.set(len * 0.78, 0.04, 0);
+      fork.rotation.z = -0.6;
+      a.add(fork);
+      sm.add(a);
+      return a;
+    };
+    twig(0.5, -0.26, 0.95, 0, Math.PI + 0.35);
+    twig(0.44, 0.27, 1.0, 0.03, 0.5);
     // the "rod": a long thin twig held out toward the lake with a dangling line
-    const rod = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.95, 0.025), this.mat.darkWood);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.016, 0.95, 5), this.mat.darkWood);
     rod.position.set(0.66, 1.38, 0.2);
     rod.rotation.set(0.5, 0, -0.55);
     sm.add(rod);
-    const smLine = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.6, 0.008), this.mat.cream);
+    const smLine = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.6, 3), this.mat.cream);
     smLine.position.set(1.0, 1.42, 0.5);
     sm.add(smLine);
-    const smBob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), this.mat.red);
+    const smBob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 1), this.mat.red);
     smBob.position.set(1.0, 1.1, 0.5);
     sm.add(smBob);
+    // dress-up slots around the head centre
+    this.snowmanSlots = {};
+    for (const slot of ["hat", "scarf", "nose"]) {
+      const g = new THREE.Group();
+      g.position.set(0, 1.3, 0);
+      g.name = `snowman-${slot}`;
+      sm.add(g);
+      this.snowmanSlots[slot] = g;
+    }
+    this.snowmanWear = {};
+    this.setSnowmanOutfit(SNOWMAN_DEFAULT_WEAR);
     const base = new THREE.Mesh(this.geo.snowCushion, this.mat.instSnow);
     base.scale.set(0.62, 0.12, 0.56);
     sm.add(base);
@@ -2220,7 +2231,10 @@ export class SouthLakeZone {
     const book = ctx.journal;
     let c;
     const r = Math.random();
-    if (r < 0.03) {
+    const wardrobe = ctx.wardrobe;
+    if (wardrobe && !wardrobe.has("tophat") && f.count >= 2 && Math.random() < 0.08) {
+      c = TOPHAT_CATCH;
+    } else if (r < 0.03) {
       c = BOTTLE_CATCH;
     } else if (r < 0.22) {
       const pool = JUNK_CATCHES.filter((j) => j !== f.last);
@@ -2280,6 +2294,9 @@ export class SouthLakeZone {
       f.jumpT = 0;
     }
     if (c.glove && this.mitten) this.mitten.visible = true;
+    if (c.tophat && wardrobe && wardrobe.unlock("tophat")) {
+      ctx.toast("✦ 雪人衣橱多了一顶旧礼帽。去湖边找雪人试试吧！");
+    }
     if (c.rare) {
       ctx.sound.coinChime();
       ctx.emote(HOLE.x, HOLE.z, "sparkle", 1.6);
@@ -2345,9 +2362,22 @@ export class SouthLakeZone {
         ctx.toast("木牌上刻着：镜湖 · 冬天湖面冻得结结实实。码头在西边，冰钓的小洞在东边的冰面上。");
         break;
       case "south_snowman": {
-        ctx.toast(SNOWMAN_LINES[this.snowmanIdx++ % SNOWMAN_LINES.length]);
         ctx.emote(SNOWMAN.x, SNOWMAN.z, "heart", 2.05);
         ctx.popup(SNOWMAN.x, 1.9, SNOWMAN.z, "嘿嘿~", "#e8f4ff");
+        const wr = ctx.wardrobe;
+        if (!wr) {
+          ctx.toast(SNOWMAN_LINES[this.snowmanIdx++ % SNOWMAN_LINES.length]);
+          break;
+        }
+        const gifts = wr.checkUnlocks({ journal: ctx.journal, snowLevel: ctx.snowLevel });
+        if (gifts.length) {
+          ctx.sound.questDone?.();
+          ctx.toast(`✦ 雪人衣橱多了：${gifts.map((g) => g.name).join("、")}`);
+        } else if (this.snowmanIdx < SNOWMAN_LINES.length) {
+          ctx.toast(SNOWMAN_LINES[this.snowmanIdx++]);
+        }
+        ctx.sound.paperRustle?.();
+        wr.open();
         break;
       }
       default:
