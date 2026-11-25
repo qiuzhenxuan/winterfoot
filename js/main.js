@@ -423,12 +423,39 @@ class WinterfootGame {
     if (!this.photoMode) {
       this._startBirthdayJourney();
     }
+    this._warmUpOtherSide();
     this._loop();
     this._startAutoSave();
     // Hide the loading screen once the first frame is on screen
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (window.__finishLoading) window.__finishLoading();
     }));
+  }
+
+  // While the loading screen is still up, draw the other side of the door once (the cottage
+  // when we start outside, the yard when we start inside) so its shaders and shadow passes
+  // are ready and the first walk through the door doesn't hitch. Everything is put back
+  // exactly as it was before the first real frame.
+  _warmUpOtherSide() {
+    const atm = this.atmosphere;
+    const objs = [this.world.group, this.farm.group, this.wildlife.group, this.interior.group, atm.snowPoints, atm.motes, ...atm.smokePuffs.map((p) => p.mesh)].filter(Boolean);
+    const was = objs.map((o) => o.visible);
+    const wasIndoor = atm.isIndoor;
+    const indoor = !this.isIndoor;
+    try {
+      this.world.group.visible = !indoor;
+      this.farm.group.visible = !indoor;
+      this.wildlife.group.visible = !indoor;
+      this.interior.group.visible = indoor;
+      this.atmosphere.setIndoorMode(indoor);
+      this.renderer.compile(this.scene, this.camera);
+      this.renderer.render(this.scene, this.camera);
+    } catch (e) {
+      console.warn("[冬麓] warm-up skipped", e);
+    } finally {
+      objs.forEach((o, i) => (o.visible = was[i]));
+      atm.isIndoor = wasIndoor;
+    }
   }
 
   // ================= Mailbox =================
