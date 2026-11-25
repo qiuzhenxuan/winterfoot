@@ -22,6 +22,7 @@
 // =====================================================================
 
 import * as THREE from "three";
+import { CONSTELLATIONS } from "./journal.js";
 import { makeSnowDriftGeometry } from "./landscape.js";
 import { NORTH_TRAIL, STARGAZE_SPUR, YARD_RECT } from "./zones.js";
 
@@ -2797,6 +2798,16 @@ export class NorthSpringZone {
   // =====================================================================
   //  Interactions
   // =====================================================================
+  // Records a sighting in the star chart; returns the line to add to the toast
+  _starNote(ctx, id) {
+    const book = ctx.journal;
+    if (!book) return "";
+    const r = book.discover("stars", id);
+    if (!r.isNew) return "";
+    ctx.sound.questDone?.();
+    return `\n✦ 新记入星图册：${r.entry.name}（${r.count}/${r.total}）`;
+  }
+
   getInteractions(playerPos) {
     const soak = this.interactions[2];
     const inPool = poolSd(playerPos.x, playerPos.z) < -0.15;
@@ -2884,7 +2895,7 @@ export class NorthSpringZone {
         if (aurora > 0.25) {
           this.scopeYawTarget = -Math.PI / 4;
           this.scopePitchTarget = 0.32;
-          ctx.toast(AURORA_LIVE);
+          ctx.toast(AURORA_LIVE + this._starNote(ctx, "aurora"));
           ctx.sound.questDone();
           this._emoteOverPlayer(ctx, "exclaim");
           ctx.bless(p.x, p.y + 2.0, p.z);
@@ -2898,12 +2909,24 @@ export class NorthSpringZone {
           ctx.sound.shootingStar(false);
           this._emoteOverPlayer(ctx, "question");
         } else if (roll < 1 / 6 + 1 / 10) {
-          ctx.toast(SHOOTING_STAR_LINE);
+          ctx.toast(SHOOTING_STAR_LINE + this._starNote(ctx, "meteor"));
           ctx.sound.shootingStar(false);
           this._emoteOverPlayer(ctx, "exclaim");
           ctx.bless(p.x, p.y + 2.0, p.z);
         } else {
-          ctx.toast(this.bagStars.next());
+          // Aim at a constellation the star chart is still missing most of the time, so the
+          // book fills up at a friendly pace; otherwise revisit an old favourite
+          const book = ctx.journal;
+          const ready = now - (this._newStarAt ?? -1e9) > 35; // one new find per little while
+          const missing = book && ready && Math.random() < 0.75 ? book.pickMissing("stars") : null;
+          if (missing) this._newStarAt = now;
+          const pick = missing || (book ? CONSTELLATIONS.filter((c) => !c.special)[Math.floor(Math.random() * 8)] : null);
+          if (pick) {
+            this.scopeYawTarget = -Math.PI / 4 + ((pick.id.length % 5) - 2) * 0.32;
+            ctx.toast(pick.line + this._starNote(ctx, pick.id));
+          } else {
+            ctx.toast(this.bagStars.next());
+          }
           ctx.sound.sipWarm();
           this._emoteOverPlayer(ctx, "sparkle");
           ctx.bless(p.x, p.y + 2.0, p.z);

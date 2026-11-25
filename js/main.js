@@ -12,6 +12,7 @@ import { GIFT_GALLERY_ITEMS, LETTER_CONTENT, BIRTHDAY, MAILBOX_LETTERS, ANIMAL_B
 import { WorldFireworks } from "./worldFireworks.js";
 import { EmoteSystem } from "./emotes.js";
 import { zoneNameAt } from "./zones.js";
+import { Journal } from "./journal.js";
 
 const BDAY_STORAGE_KEY = "winterfootBirthday.v1";
 const SAVE_KEY = "winterfootSave.v1";
@@ -182,6 +183,20 @@ class WinterfootGame {
     this.selectedSlot = 0;
     this.mailRead = [];
 
+    // 冬麓图鉴: the collection book (star charts, fish, snowman wardrobe...)
+    this.journal = new Journal({
+      onNew: () => {
+        const b = document.getElementById("btn-journal");
+        if (b) {
+          b.classList.remove("pulse");
+          void b.offsetWidth;
+          b.classList.add("pulse");
+        }
+        this._saveGame();
+      },
+      onComplete: (kind) => this._onJournalComplete(kind),
+    });
+
     // Restore the farm from the last visit (crops, gold, animals, day, weather...)
     this.savedGame = loadGameSave();
     if (this.savedGame) this._applySave(this.savedGame);
@@ -297,6 +312,7 @@ class WinterfootGame {
       },
       onReplayFireworks: () => this._startWishFireworks(),
     });
+    this.ui.journal = this.journal;
 
     this.ui.dayBadge = "";
     if (this.savedGame) this.ui.syncWeatherButtons(this.atmosphere.snowLevel);
@@ -510,6 +526,20 @@ class WinterfootGame {
     if (sv.wildlife) this.wildlife.restoreState(sv.wildlife);
     if (typeof sv.trough === "boolean") this.world.setTroughFilled(sv.trough);
     if (Array.isArray(sv.mailRead)) this.mailRead = sv.mailRead.slice();
+    if (sv.journal) this.journal.restoreState(sv.journal);
+  }
+
+  // A whole page of the book filled in: a small reward and a cheer
+  _onJournalComplete(kind) {
+    const rewards = { stars: [300, "星图册集齐啦！冬麓的夜空你都认识了。奖励 300 金币"] };
+    const [gold, line] = rewards[kind] || [200, "图鉴的这一页集齐啦！奖励 200 金币"];
+    this.gold += gold;
+    setTimeout(() => {
+      this.ui.showToast(line);
+      this.sound.questDone();
+      this._refreshUI();
+    }, 1400);
+    this._saveGame();
   }
 
   _saveGame() {
@@ -528,6 +558,7 @@ class WinterfootGame {
         wildlife: this.wildlife.getState(),
         trough: !!this.world.troughFilled,
         mailRead: this.mailRead,
+        journal: this.journal.getState(),
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch {
@@ -1011,6 +1042,7 @@ class WinterfootGame {
       aurora: this.atmosphere.skyUniforms?.uAurora?.value ?? 0,
       day: this.day,
       player: this.player,
+      journal: this.journal,
     };
   }
 
@@ -1095,6 +1127,16 @@ class WinterfootGame {
         }
         return;
       }
+      if (this.journal.isOpen()) {
+        if (e.repeat) return;
+        if (e.code === "Escape" || e.code === "KeyJ" || e.code === "KeyE") this.journal.close();
+        else if (e.code === "ArrowLeft" || e.code === "KeyA" || e.code === "KeyQ") this.journal.stepTab(-1);
+        else if (e.code === "ArrowRight" || e.code === "KeyD" || e.code === "Tab") {
+          e.preventDefault();
+          this.journal.stepTab(1);
+        }
+        return;
+      }
       if (e.code === "Escape") {
         document.getElementById("help-modal").classList.add("hidden");
         this.ui.closeGiftGallery();
@@ -1142,6 +1184,9 @@ class WinterfootGame {
         this.camTargetDist = this.isIndoor ? 16.4 : 22.6;
       } else if (e.code === "KeyH") {
         this.setPhotoMode(!this.photoMode);
+      } else if (e.code === "KeyJ" && !e.repeat && !this.photoMode) {
+        this.keys.clear();
+        this.journal.open();
       }
     });
 

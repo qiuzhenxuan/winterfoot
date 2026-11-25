@@ -167,6 +167,9 @@
         <span title="新鲜温牛奶">🥛<b id="cnt-milk">0</b></span>
         <span title="蓬松冬羊毛">🧶<b id="cnt-wool">0</b></span>
       </div>
+      <button id="btn-journal" type="button" class="hud-journal-btn" title="冬麓图鉴（J）">
+        <span class="journal-book-ico"></span><span>图鉴</span><b id="journal-count">0/0</b>
+      </button>
     </section>
 
     <!-- Context Interaction Prompt -->
@@ -275,7 +278,7 @@
           <button id="btn-close-help" class="mini-btn">✕</button>
         </div>
         <ul class="help-list">
-          <li><b>电脑端操作</b>：<b>WASD / 方向键</b>移动（<b>Shift</b> 小跑）、<b>左键 / 空格</b>耕作、<b>E 键</b>互动、<b>1–8</b> 切工具、<b>右键自由拖动</b> 360° 环视与上下俯仰看雪山落日、<b>滚轮</b>缩放、<b>R</b> 复位、<b>H</b> 纯净拍照模式</li>
+          <li><b>电脑端操作</b>：<b>WASD / 方向键</b>移动（<b>Shift</b> 小跑）、<b>左键 / 空格</b>耕作、<b>E 键</b>互动、<b>1–8</b> 切工具、<b>右键自由拖动</b> 360° 环视与上下俯仰看雪山落日、<b>滚轮</b>缩放、<b>R</b> 复位、<b>H</b> 纯净拍照模式、<b>J</b> 打开冬麓图鉴</li>
           <li><b>手机端触控</b>：<b>左下角虚拟轮盘</b> 360° 移动（推到外圈自动冲刺）；<b>单指直接点选</b>菜田、木门、动物、礼物盒、火漆信或 Claude 小螃蟹交互；<b>单指滑动空白处</b>旋转视角、<b>双指捏合</b>缩放；也可点<b>右下角圆键</b>耕作与互动</li>
           <li><b>户外农场</b>：西侧菜田翻地/播种/浇水/收获；东侧牧场喂养小奶牛/绵羊/母鸡并收集鲜奶/羊毛/鸡蛋；石水井打水、出货箱卖货、摇松树捡柴火、过拱桥找篝火边的 <b>Claude 小螃蟹</b> 互动</li>
           <li><b>精致小屋室内</b>：四面全景大窗实时渲染窗外雪林与飘雪；<b>点选右窗下礼物盒堆</b>拆开纪念画册（支持左右滑动翻页）、<b>走近书桌点选火漆信</b>拆开阅读、<b>餐桌上的生日蛋糕</b>可以许愿吹蜡烛，还可撸橘猫、品热可可、灶台烹饪、上床睡到第二天</li>
@@ -315,6 +318,19 @@
           <button id="btn-gift-next" class="gift-nav-btn" title="下一张">▶</button>
         </div>
         <div id="gift-thumbs" class="gift-thumbs"></div>
+      </div>
+    </div>
+
+    <!-- 冬麓图鉴: collection book -->
+    <div id="journal-modal" class="hidden">
+      <div class="sdv-panel journal-card-wrap">
+        <div class="panel-header">
+          <span class="panel-title">冬麓图鉴 <span id="journal-progress" class="gift-counter">0 / 0</span></span>
+          <button id="btn-close-journal" class="mini-btn" title="合上图鉴">✕</button>
+        </div>
+        <div id="journal-tabs" class="journal-tabs"></div>
+        <div id="journal-grid" class="journal-grid"></div>
+        <div id="journal-detail" class="journal-detail"></div>
       </div>
     </div>
 

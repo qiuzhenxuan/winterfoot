@@ -630,8 +630,11 @@ export class GameUI {
     const div = document.createElement("div");
     div.className = "toast-item";
     div.textContent = msg;
+    // longer lines (a constellation and its note) stay up long enough to read
+    const ms = Math.max(2650, Math.min(7000, String(msg).length * 85));
+    if (ms > 2650) div.style.animationDuration = `${ms - 50}ms`;
     this.elToastBox.appendChild(div);
-    setTimeout(() => div.remove(), 2650);
+    setTimeout(() => div.remove(), ms);
   }
 
   // Parchment speech bubble with a birthday blessing (stays ~3.6 s)
@@ -677,7 +680,7 @@ export class GameUI {
   // ================= Birthday layer =================
 
   isModalOpen() {
-    return this.isGiftGalleryOpen() || this.isLetterOpen() || this.isDialogueOpen() || this.isWishOpen() || this.isTitleOpen() || this.isMailOpen();
+    return this.isGiftGalleryOpen() || this.isLetterOpen() || this.isDialogueOpen() || this.isWishOpen() || this.isTitleOpen() || this.isMailOpen() || !!(this.journal && this.journal.isOpen());
   }
 
   isMailOpen() {
