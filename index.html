@@ -282,6 +282,7 @@
           <li><b>手机端触控</b>：<b>左下角虚拟轮盘</b> 360° 移动（推到外圈自动冲刺）；<b>单指直接点选</b>菜田、木门、动物、礼物盒、火漆信或 Claude 小螃蟹交互；<b>单指滑动空白处</b>旋转视角、<b>双指捏合</b>缩放；也可点<b>右下角圆键</b>耕作与互动</li>
           <li><b>户外农场</b>：西侧菜田翻地/播种/浇水/收获；东侧牧场喂养小奶牛/绵羊/母鸡并收集鲜奶/羊毛/鸡蛋；石水井打水、出货箱卖货、摇松树捡柴火、过拱桥找篝火边的 <b>Claude 小螃蟹</b> 互动</li>
           <li><b>雪谷探索</b>：北边山麓用望远镜看星座、南边镜湖冰钓，找到的都记进<b>冬麓图鉴</b>；镜湖边的雪人可以换帽子、围巾和鼻子，有的用金币买，有的要靠钓鱼、集图鉴或大雪天才能拿到；水井旁的<b>布告栏</b>每天早上会贴出邻居们的小委托，揭下来做完就有金币谢礼</li>
+          <li><b>小屋摆设</b>：小屋里有几块空地，走过去地上会亮起一圈光，按 E 就能摆家具。地毯、落地灯、摇椅、书架这些可以直接用金币买；帮邻居做委托、集齐图鉴还会收到礼物，收到后自己找个地方摆上</li>
           <li><b>精致小屋室内</b>：四面全景大窗实时渲染窗外雪林与飘雪；<b>点选右窗下礼物盒堆</b>拆开纪念画册（支持左右滑动翻页）、<b>走近书桌点选火漆信</b>拆开阅读、<b>餐桌上的生日蛋糕</b>可以许愿吹蜡烛，还可撸橘猫、品热可可、灶台烹饪、上床睡到第二天</li>
         </ul>
         <div class="help-actions">
@@ -360,6 +361,17 @@
         </div>
         <div id="snowman-rows" class="snowman-rows"></div>
         <div id="snowman-detail" class="journal-detail"></div>
+      </div>
+    </div>
+
+    <div id="decor-modal" class="hidden">
+      <div class="sdv-panel journal-card-wrap decor-wrap">
+        <div class="panel-header">
+          <span class="panel-title">小屋摆设 · <span id="decor-title"></span> <span id="decor-gold" class="gift-counter">0 G</span></span>
+          <button id="btn-close-decor" class="mini-btn" title="关上">✕</button>
+        </div>
+        <div id="decor-cards" class="decor-cards"></div>
+        <div id="decor-detail" class="journal-detail"></div>
       </div>
     </div>
 

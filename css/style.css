@@ -1502,6 +1502,56 @@ body.photo-mode #game-canvas {
   .snowman-card .journal-name { font-size: 10px; }
 }
 
+/* 小屋摆设 */
+#decor-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 16, 28, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+  padding: 16px;
+}
+#decor-modal.hidden { display: none; }
+.decor-wrap { width: min(640px, 94vw); }
+.decor-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; }
+.decor-card { position: relative; padding: 4px; }
+.decor-card .journal-art { aspect-ratio: 40 / 34; }
+.decor-card .journal-name { font-size: 11px; }
+.decor-card.worn { background: #fff4d6; border-color: #5c8a4a; }
+.decor-card.worn::after {
+  content: "✓";
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #3f7a3a;
+  text-shadow: 0 1px 0 #fff;
+}
+.decor-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.decor-card.stow { background: #f3e6cc; }
+.decor-where {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(60, 30, 12, 0.72);
+  color: #fff4d6;
+  font-size: 10px;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .decor-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .decor-card .journal-name { font-size: 10px; }
+}
+
 /* 布告栏小委托 */
 #board-modal {
   position: absolute;

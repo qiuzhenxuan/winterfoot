@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { makeSnowDriftGeometry } from "./landscape.js";
 import { collectReferencedObjects, batchStaticMeshes } from "./staticBatch.js";
+import { DECOR_SPOTS, DECOR_ITEMS, buildDecorModel, buildSpotMarker } from "./decor.js";
 
 function createMulberry(seed) {
   let a = seed >>> 0;
@@ -96,6 +97,69 @@ export class CottageInterior {
       const refs = collectReferencedObjects([this], ["group", "scene", "textures", "parent", "colliders"]);
       this.staticBatchStats = batchStaticMeshes(this.group, refs, { name: "interior-static", lockedMaterials: refs.materials });
     }
+
+    // 小屋摆设: furniture the player places (built after batching, so it can come and go)
+    this.decorGroup = new THREE.Group();
+    this.decorGroup.name = "cottage-decor";
+    this.group.add(this.decorGroup);
+    this.decorPieces = new Map(); // spotId -> { id, group, tick, collider }
+    this.decorMarkers = new Map();
+    for (const sp of DECOR_SPOTS) {
+      const mk = buildSpotMarker(sp);
+      mk.visible = false;
+      this.decorGroup.add(mk);
+      this.decorMarkers.set(sp.id, mk);
+    }
+  }
+
+  // placed: { spotId: itemId }. Builds only what changed.
+  setDecor(placed = {}) {
+    for (const [spotId, piece] of this.decorPieces) {
+      if (placed[spotId] === piece.id) continue;
+      this.decorGroup.remove(piece.group);
+      piece.group.traverse((o) => o.isMesh && o.geometry && o.geometry.dispose());
+      if (piece.collider) this.colliders.splice(this.colliders.indexOf(piece.collider), 1);
+      this.decorPieces.delete(spotId);
+    }
+    for (const sp of DECOR_SPOTS) {
+      const id = placed[sp.id];
+      if (!id || this.decorPieces.has(sp.id)) continue;
+      const it = DECOR_ITEMS.find((d) => d.id === id);
+      if (!it) continue;
+      const { group, tick } = buildDecorModel(id);
+      group.position.set(sp.x, 0, sp.z);
+      group.rotation.y = sp.rot;
+      this.decorGroup.add(group);
+      let collider = null;
+      if (it.foot) {
+        // axis-aligned box around the turned footprint
+        const [w, d] = it.foot;
+        const c = Math.abs(Math.cos(sp.rot));
+        const s = Math.abs(Math.sin(sp.rot));
+        const bw = w * c + d * s;
+        const bd = w * s + d * c;
+        collider = { minX: sp.x - bw / 2, maxX: sp.x + bw / 2, minZ: sp.z - bd / 2, maxZ: sp.z + bd / 2, decor: true };
+        this.colliders.push(collider);
+      }
+      this.decorPieces.set(sp.id, { id, group, tick, collider });
+    }
+  }
+
+  // Free spots glow softly when the player walks near; placed pieces animate.
+  updateDecor(dt, elapsed, px, pz, focusSpot = null) {
+    if (!this.group.visible || !this.decorMarkers) return;
+    for (const sp of DECOR_SPOTS) {
+      const mk = this.decorMarkers.get(sp.id);
+      const empty = !this.decorPieces.has(sp.id);
+      const d = Math.hypot(px - sp.x, pz - sp.z);
+      let target = empty ? THREE.MathUtils.clamp((2.4 - d) / 1.2, 0, 1) * 0.55 : 0;
+      if (focusSpot === sp.id) target = Math.max(target, 0.85);
+      const u = mk.userData;
+      u.o = (u.o || 0) + (target - (u.o || 0)) * Math.min(1, dt * 6);
+      u.mat.opacity = u.o * (focusSpot === sp.id ? 0.85 + 0.15 * Math.sin(elapsed * 4) : 1);
+      mk.visible = u.o > 0.01;
+    }
+    for (const p of this.decorPieces.values()) if (p.tick) p.tick(elapsed);
   }
 
   _addBoxCollider(cx, cz, w, d) {

@@ -680,7 +680,7 @@ export class GameUI {
   // ================= Birthday layer =================
 
   isModalOpen() {
-    return this.isGiftGalleryOpen() || this.isLetterOpen() || this.isDialogueOpen() || this.isWishOpen() || this.isTitleOpen() || this.isMailOpen() || !!(this.journal && this.journal.isOpen()) || !!(this.wardrobe && this.wardrobe.isOpen()) || !!(this.board && this.board.isOpen());
+    return this.isGiftGalleryOpen() || this.isLetterOpen() || this.isDialogueOpen() || this.isWishOpen() || this.isTitleOpen() || this.isMailOpen() || !!(this.journal && this.journal.isOpen()) || !!(this.wardrobe && this.wardrobe.isOpen()) || !!(this.board && this.board.isOpen()) || !!(this.decor && this.decor.isOpen());
   }
 
   isMailOpen() {

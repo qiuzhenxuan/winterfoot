@@ -15,6 +15,7 @@ import { zoneNameAt } from "./zones.js";
 import { Journal } from "./journal.js";
 import { SnowmanWardrobe } from "./snowman.js";
 import { NoticeBoard } from "./board.js";
+import { CottageDecor, DECOR_SPOTS, DECOR_ITEMS } from "./decor.js";
 
 const BDAY_STORAGE_KEY = "winterfootBirthday.v1";
 const SAVE_KEY = "winterfootSave.v1";
@@ -195,6 +196,7 @@ class WinterfootGame {
           b.classList.add("pulse");
         }
         this._checkWardrobeGifts();
+        this._checkDecorGifts();
         this._saveGame();
       },
       onComplete: (kind) => this._onJournalComplete(kind),
@@ -235,7 +237,22 @@ class WinterfootGame {
       onDone: (note, line) => {
         this.ui?.showToast(line);
         this.sound.coinChime();
+        this._checkDecorGifts(3200);
       },
+      onChange: () => this._saveGame(),
+      sound: this.sound,
+    });
+
+    // 小屋摆设: furniture and keepsakes placed around the cottage
+    this.decor = new CottageDecor({
+      getGold: () => this.gold,
+      spendGold: (n) => {
+        if (this.gold < n) return false;
+        this.gold -= n;
+        this._refreshUI?.();
+        return true;
+      },
+      onPlace: (placed) => this.interior.setDecor(placed),
       onChange: () => this._saveGame(),
       sound: this.sound,
     });
@@ -358,6 +375,7 @@ class WinterfootGame {
     this.ui.journal = this.journal;
     this.ui.wardrobe = this.wardrobe;
     this.ui.board = this.board;
+    this.ui.decor = this.decor;
     // the first morning (or a save from before the board existed) gets its notes
     this.board.newDay(this.day);
 
@@ -576,6 +594,18 @@ class WinterfootGame {
     if (sv.journal) this.journal.restoreState(sv.journal);
     if (sv.snowman) this.wardrobe.restoreState(sv.snowman);
     if (sv.board) this.board.restoreState(sv.board);
+    if (sv.decor) this.decor.restoreState(sv.decor);
+    // keepsakes a save from before the decor existed had already earned
+    this.decor.checkUnlocks({ journal: this.journal, board: this.board });
+  }
+
+  // Helping the neighbours and filling the journal send keepsakes for the cottage
+  _checkDecorGifts(delay = 2600) {
+    if (!this.decor) return;
+    const got = this.decor.checkUnlocks({ journal: this.journal, board: this.board });
+    for (const [i, it] of got.entries()) {
+      setTimeout(() => this.ui.showToast(`✦ ${it.from}送来了「${it.name}」，回小屋找个地方摆上吧！`), delay + i * 2600);
+    }
   }
 
   // Journal milestones send the snowman new clothes
@@ -622,6 +652,7 @@ class WinterfootGame {
         journal: this.journal.getState(),
         snowman: this.wardrobe ? this.wardrobe.getState() : undefined,
         board: this.board ? this.board.getState() : undefined,
+        decor: this.decor ? this.decor.getState() : undefined,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch {
@@ -1208,6 +1239,20 @@ class WinterfootGame {
         }
         return;
       }
+      if (this.decor.isOpen()) {
+        if (e.repeat && !e.code.startsWith("Arrow")) return;
+        const c = e.code;
+        if (c === "Escape" || c === "KeyQ") this.decor.close();
+        else if (c === "ArrowLeft" || c === "KeyA" || c === "ArrowUp" || c === "KeyW") this.decor.move(-1);
+        else if (c === "ArrowRight" || c === "KeyD" || c === "ArrowDown" || c === "KeyS" || c === "Tab") {
+          e.preventDefault();
+          this.decor.move(1);
+        } else if (c === "KeyE" || c === "Enter" || c === "Space") {
+          e.preventDefault();
+          this._onDecorResult(this.decor.activate());
+        }
+        return;
+      }
       if (this.wardrobe.isOpen()) {
         if (e.repeat && !e.code.startsWith("Arrow")) return;
         const c = e.code;
@@ -1516,6 +1561,9 @@ class WinterfootGame {
         { x: this.interior.stovePos.x, z: this.interior.stovePos.z, tapR: 1.35, reach: 2.2, act: { type: this.inventory.milk > 0 ? "cook_milk" : "cook_soup" }, name: "铸铁灶台" },
         { x: this.interior.exitPos.x, z: this.interior.exitPos.z, tapR: 1.1, reach: 1.75, act: { type: "leave_cottage" }, name: "木门出口" }
       );
+      for (const sp of DECOR_SPOTS) {
+        candidates.push({ x: sp.x, z: sp.z, tapR: sp.kind === "rug" ? 0.75 : 0.6, reach: 1.7, act: this._decorAct(sp), name: sp.name });
+      }
     } else {
       candidates.push(
         { x: this.world.mailboxPos.x, z: this.world.mailboxPos.z, tapR: 0.9, reach: 1.9, act: { type: "check_mail" }, name: "信箱" },
@@ -1783,6 +1831,17 @@ class WinterfootGame {
     const pz = this.player.position.z;
 
     if (this.isIndoor) {
+      // 小屋摆设 spots come first, but only when standing right at one
+      let bestSpot = null;
+      let bestSD = Infinity;
+      for (const sp of DECOR_SPOTS) {
+        const d = Math.hypot(px - sp.x, pz - sp.z);
+        if (d < (sp.r || 0.95) && d < bestSD) {
+          bestSD = d;
+          bestSpot = sp;
+        }
+      }
+      if (bestSpot) return this._decorAct(bestSpot);
       const distGift = Math.hypot(px - this.interior.giftPilePos.x, pz - this.interior.giftPilePos.z);
       if (distGift < 2.15) {
         return { type: "open_gift", label: "打开礼物盒", allowClick: true };
@@ -1997,6 +2056,7 @@ class WinterfootGame {
       case "shake_tree": return { x: act.target.x, y: 1.9, z: act.target.z };
       case "zone": return act.anchorY == null ? null : { x: act.target.x, y: act.anchorY, z: act.target.z };
       case "sleep_bed": return at(I.bedPos, 1.35);
+      case "decor_spot": return at(act.target, act.target.kind === "rug" ? 0.7 : 1.35);
       case "pet_cat": return at(I.catPos, 2.35);
       case "stoke_hearth": return at(I.fireplacePos, 1.25);
       case "drink_cocoa": return at(I.teaTablePos, 1.15);
@@ -2018,6 +2078,20 @@ class WinterfootGame {
       anchorY: it.anchorY ?? 1.6,
       allowClick: it.allowClick ?? true,
     };
+  }
+
+  _decorAct(sp) {
+    const id = this.decor.placed[sp.id];
+    const it = id ? DECOR_ITEMS.find((d) => d.id === id) : null;
+    return { type: "decor_spot", target: sp, label: it ? `整理${sp.name}的${it.name}` : `在${sp.name}摆点东西`, allowClick: true };
+  }
+
+  _onDecorResult(r) {
+    if (!r) return;
+    if (r.kind === "buy") {
+      this.sound.questDone();
+      this._refreshUI();
+    } else if (r.kind === "place" || r.kind === "move" || r.kind === "stow") this.sound.paperRustle?.();
   }
 
   _getInteractKey(act) {
@@ -2172,6 +2246,11 @@ class WinterfootGame {
         this.board.note("pet");
         break;
       }
+      case "decor_spot":
+        this.keys.clear();
+        this.sound.paperRustle();
+        this.decor.open(act.target.id);
+        break;
       case "notice_board":
         this.keys.clear();
         this.sound.paperRustle();
@@ -2626,6 +2705,8 @@ class WinterfootGame {
       this.interior.setCakeHovered(hoveringCake);
       this.canvas.style.cursor = (hoveringGift || hoveringLetter || hoveringCake) ? "pointer" : "crosshair";
       this.interior.update(dt, this.elapsed, this.atmosphere.getSkySample(), this.atmosphere.snowLevel);
+      const ai = this.activeInteract;
+      this.interior.updateDecor(dt, this.elapsed, this.player.position.x, this.player.position.z, ai && ai.type === "decor_spot" ? ai.target.id : null);
     }
 
     this.activeInteract = this._findBestInteractable();
