@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { makeSnowDriftGeometry } from "./landscape.js";
+import { collectReferencedObjects, batchStaticMeshes } from "./staticBatch.js";
 
 function createMulberry(seed) {
   let a = seed >>> 0;
@@ -88,6 +89,13 @@ export class CottageInterior {
     this._buildFestiveDecor();
     this._buildCeilingBeamsAndLighting();
     this._buildOutdoorVista();
+
+    // Fold furniture, logs, books, boards... that never move into fewer merged meshes.
+    // Anything the game keeps a handle on (cake, gifts, cat, fire, hover targets) stays as is.
+    if (!options.noStaticBatch) {
+      const refs = collectReferencedObjects([this], ["group", "scene", "textures", "parent", "colliders"]);
+      this.staticBatchStats = batchStaticMeshes(this.group, refs, { name: "interior-static", lockedMaterials: refs.materials });
+    }
   }
 
   _addBoxCollider(cx, cz, w, d) {
