@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { makeSnowDriftGeometry } from "./landscape.js";
+import { collectReferencedObjects, batchStaticMeshes, batchScalableCaps } from "./staticBatch.js";
 import { riverCenterX, RIVER } from "./river.js";
 import { YARD_RECT, projectToWalkable } from "./zones.js";
 import { SouthLakeZone } from "./zoneSouth.js";
@@ -77,6 +78,20 @@ export class OutdoorWorld {
 
     this._buildGroundDetails();
     this._collectSnowCaps();
+
+    // Fold the thousand-odd props that never move (fence boards, stones, logs, roof
+    // shingles...) into a few hundred merged meshes. Anything the game keeps a handle on
+    // (animated, hidden, swapped, raycast) is left exactly as it is.
+    if (!options.noStaticBatch) {
+      const skip = ["group", "scene", "world", "landscape", "textures", "zones", "colliders", "parent"];
+      // snow caps first: they keep growing and shrinking with the snow, as one mesh per area
+      const capLocks = collectReferencedObjects([this, ...this.zones], [...skip, "snowCaps"]);
+      const caps = batchScalableCaps(this.group, this.snowCaps, capLocks);
+      this.snowCaps = this.snowCaps.filter((c) => !caps.taken.has(c));
+      this.snowCapBatches = caps.handles;
+      const refs = collectReferencedObjects([this, ...this.zones], skip);
+      this.staticBatchStats = batchStaticMeshes(this.group, refs, { name: "world-static", lockedMaterials: refs.materials });
+    }
   }
 
   // Little Stardew-style ground clutter poking through the snow: dry grass tufts, pebbles,
@@ -231,6 +246,7 @@ export class OutdoorWorld {
     this.snowAccum = 0.35; // 0 = melted thin, 0.35 = normal light snow, 1 = deep after a long blizzard
     this._snowCapScale = 1;
     this.snowCaps = [];
+    this.snowCapBatches = [];
     const skip = new Set(this.pathSnowCaps.map((c) => c.mesh));
     this.group.traverse((o) => {
       if (!o.isMesh || skip.has(o) || !o.material || o.material.map !== this.textures.snowCap) return;
@@ -253,6 +269,7 @@ export class OutdoorWorld {
     if (Math.abs(capScale - this._snowCapScale) > 0.003) {
       this._snowCapScale = capScale;
       for (const c of this.snowCaps) c.mesh.scale.y = c.baseY * capScale;
+      for (const b of this.snowCapBatches) b.setScale(capScale);
     }
     return a;
   }
