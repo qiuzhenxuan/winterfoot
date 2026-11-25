@@ -14,6 +14,7 @@ import { EmoteSystem } from "./emotes.js";
 import { zoneNameAt } from "./zones.js";
 import { Journal } from "./journal.js";
 import { SnowmanWardrobe } from "./snowman.js";
+import { NoticeBoard } from "./board.js";
 
 const BDAY_STORAGE_KEY = "winterfootBirthday.v1";
 const SAVE_KEY = "winterfootSave.v1";
@@ -210,6 +211,31 @@ class WinterfootGame {
         return true;
       },
       onWear: (wear) => southZone && southZone.setSnowmanOutfit(wear),
+      onDress: () => this.board && this.board.note("snowman"),
+      onChange: () => this._saveGame(),
+      sound: this.sound,
+    });
+
+    // 布告栏小委托: neighbours' small jobs, paid in gold
+    this.board = new NoticeBoard({
+      prices: {
+        carrot: CROP_DEFS.carrot.price,
+        radish: CROP_DEFS.radish.price,
+        cabbage: CROP_DEFS.cabbage.price,
+        pumpkin: CROP_DEFS.pumpkin.price,
+        ...ANIMAL_PRICES,
+        firewood: 18,
+      },
+      getInventory: () => this.inventory,
+      addGold: (n) => {
+        this.gold += n;
+        this._refreshUI?.();
+      },
+      onNotes: (k) => this.world.noticeBoard && this.world.noticeBoard.setCount(k),
+      onDone: (note, line) => {
+        this.ui?.showToast(line);
+        this.sound.coinChime();
+      },
       onChange: () => this._saveGame(),
       sound: this.sound,
     });
@@ -331,6 +357,9 @@ class WinterfootGame {
     });
     this.ui.journal = this.journal;
     this.ui.wardrobe = this.wardrobe;
+    this.ui.board = this.board;
+    // the first morning (or a save from before the board existed) gets its notes
+    this.board.newDay(this.day);
 
     this.ui.dayBadge = "";
     if (this.savedGame) this.ui.syncWeatherButtons(this.atmosphere.snowLevel);
@@ -546,6 +575,7 @@ class WinterfootGame {
     if (Array.isArray(sv.mailRead)) this.mailRead = sv.mailRead.slice();
     if (sv.journal) this.journal.restoreState(sv.journal);
     if (sv.snowman) this.wardrobe.restoreState(sv.snowman);
+    if (sv.board) this.board.restoreState(sv.board);
   }
 
   // Journal milestones send the snowman new clothes
@@ -591,6 +621,7 @@ class WinterfootGame {
         mailRead: this.mailRead,
         journal: this.journal.getState(),
         snowman: this.wardrobe ? this.wardrobe.getState() : undefined,
+        board: this.board ? this.board.getState() : undefined,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch {
@@ -1077,6 +1108,7 @@ class WinterfootGame {
       player: this.player,
       journal: this.journal,
       wardrobe: this.wardrobe,
+      board: this.board,
     };
   }
 
@@ -1158,6 +1190,21 @@ class WinterfootGame {
         if (isConfirm) {
           e.preventDefault();
           if (!e.repeat) this.ui.tryBlowWish();
+        }
+        return;
+      }
+      if (this.board.isOpen()) {
+        if (e.repeat && !e.code.startsWith("Arrow")) return;
+        const c = e.code;
+        if (c === "Escape" || c === "KeyQ") this.board.close();
+        else if (c === "ArrowLeft" || c === "KeyA" || c === "ArrowUp" || c === "KeyW") this.board.move(-1);
+        else if (c === "ArrowRight" || c === "KeyD" || c === "ArrowDown" || c === "KeyS" || c === "Tab") {
+          e.preventDefault();
+          this.board.move(1);
+        } else if (c === "KeyE" || c === "Enter" || c === "Space") {
+          e.preventDefault();
+          const r = this.board.activate();
+          if (r && (r.kind === "take" || r.kind === "deliver")) this._refreshUI();
         }
         return;
       }
@@ -1472,6 +1519,7 @@ class WinterfootGame {
     } else {
       candidates.push(
         { x: this.world.mailboxPos.x, z: this.world.mailboxPos.z, tapR: 0.9, reach: 1.9, act: { type: "check_mail" }, name: "信箱" },
+        { x: this.world.noticeBoardPos.x, z: this.world.noticeBoardPos.z, tapR: 1.1, reach: 2.1, act: { type: "notice_board" }, name: "布告栏" },
         { x: this.world.shippingBinPos.x, z: this.world.shippingBinPos.z, tapR: 1.25, reach: 2.25, act: { type: this._getHarvestSellValue() > 0 ? "shipping_sell" : "shipping_buy" }, name: "出货箱" },
         { x: this.world.coopNestPos.x, z: this.world.coopNestPos.z, tapR: 1.15, reach: 2.05, act: { type: this.wildlife.coopEggs > 0 ? "collect_eggs" : "check_coop" }, name: "鸡窝" },
         { x: this.world.hayTroughPos.x, z: this.world.hayTroughPos.z, tapR: 1.25, reach: 2.15, act: { type: "feed_trough" }, name: "干草食槽" },
@@ -1785,6 +1833,12 @@ class WinterfootGame {
       };
     }
 
+    // 1c. Notice board
+    if (Math.hypot(px - this.world.noticeBoardPos.x, pz - this.world.noticeBoardPos.z) < 1.75) {
+      const k = this.board.posted.length;
+      return { type: "notice_board", label: k ? `看看布告栏（有 ${k} 张新委托）` : "看看布告栏上的委托", allowClick: true };
+    }
+
     // 2. Shipping Bin (sell all veggies + animal produce, or buy seed pack)
     if (Math.hypot(px - this.world.shippingBinPos.x, pz - this.world.shippingBinPos.z) < 1.9) {
       const totalVal = this._getHarvestSellValue();
@@ -1926,6 +1980,7 @@ class WinterfootGame {
       case "check_mail": return at(W.mailboxPos, this._getNextMail() ? 2.55 : 1.85);
       case "shipping_sell":
       case "shipping_buy": return at(W.shippingBinPos, 1.75);
+      case "notice_board": return at(W.noticeBoardPos, 2.45);
       case "collect_eggs":
       case "check_coop": return at(W.coopNestPos, 1.45);
       case "feed_trough": return at(W.hayTroughPos, 1.35);
@@ -2087,6 +2142,7 @@ class WinterfootGame {
         this.sound.hayRustle();
         this._popupAt(this.world.hayTroughPos.x, 1.1, this.world.hayTroughPos.z, "干草已添满!", "#f5d76e");
         this.ui.showToast("食槽堆满了金黄干草，牧场里的小奶牛、绵羊和母鸡们都开心围过来啦！");
+        this.board.note("feed");
         break;
       }
       case "farm_animal": {
@@ -2113,8 +2169,14 @@ class WinterfootGame {
           this._popupAt(ap.x, 1.1, ap.z, "暖乎乎很亲人", "#ffd2dc");
         }
         this._maybeBless(ap.x, (a.kind === "cow" ? 1.62 : a.kind === "sheep" ? 1.3 : 1.02) + 0.9, ap.z);
+        this.board.note("pet");
         break;
       }
+      case "notice_board":
+        this.keys.clear();
+        this.sound.paperRustle();
+        this.board.open();
+        break;
       case "shipping_sell": {
         const val = this._getHarvestSellValue();
         this.inventory.carrot = 0;
@@ -2130,6 +2192,7 @@ class WinterfootGame {
         this._popupAt(this.world.shippingBinPos.x, 1.4, this.world.shippingBinPos.z, `+${val} G`, "#ffe159");
         this.ui.showToast(`出货箱结算成功！赚到了 ${val} 金币`);
         this._refreshUI();
+        this.board.note("ship", val);
         break;
       }
       case "shipping_buy":
@@ -2172,6 +2235,7 @@ class WinterfootGame {
           this.sound.fireStoke();
           this._popupAt(this.world.campfirePos.x, 1.2, this.world.campfirePos.z, "篝火烧得更旺了!", "#ffb247");
           this._refreshUI();
+          this.board.note("campfire");
         } else {
           this.ui.showToast("背包里没有松木柴火了，去摇晃旁边的雪松树吧！");
         }
@@ -2198,6 +2262,7 @@ class WinterfootGame {
         this.sound.woodPickup();
         this._popupAt(act.target.x, 0.65, act.target.z, "+1 松木柴火", "#f5cfa0");
         this._refreshUI();
+        this.board.note("wood");
         break;
       case "shake_tree": {
         this.player.triggerSwing();
@@ -2289,6 +2354,7 @@ class WinterfootGame {
       grown = this.farm.advanceNewDay();
       animalRes = this.wildlife.advanceNewDay();
       this.atmosphere.setTime(7.0);
+      this.board.newDay(this.day);
       this._refreshUI();
     });
     this.inTransition = false;
@@ -2299,6 +2365,9 @@ class WinterfootGame {
     );
     if (this._getNextMail()) {
       setTimeout(() => this.ui.showToast("门口的信箱旗子竖起来了，有新的信"), 2800);
+    }
+    if (this.board.posted.length) {
+      setTimeout(() => this.ui.showToast("布告栏上贴了新的委托纸条"), 5600);
     }
   }
 

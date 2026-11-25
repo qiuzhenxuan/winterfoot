@@ -2275,6 +2275,7 @@ export class SouthLakeZone {
     ctx.popup(HOLE.x, 1.3, HOLE.z, c.empty ? "空钩……" : c.cm ? `钓到了 ${c.name}! ${c.cm} 厘米` : `钓到了 ${c.name}!`, c.color);
     let msg = c.text;
     if (c.fishDef) {
+      ctx.board?.note("fish");
       msg += c.fishDef.shape === "shrimp" ? " 放它回去找妈妈吧。" : " 量了量有 " + c.cm + " 厘米，又轻轻放回湖里啦。";
       if (book) {
         const res = book.discover("fish", c.fishDef.id);

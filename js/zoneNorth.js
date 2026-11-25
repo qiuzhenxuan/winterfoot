@@ -2890,6 +2890,7 @@ export class NorthSpringZone {
           this._emoteOverPlayer(ctx, "dots");
           break;
         }
+        ctx.board?.note("star");
         // optional: main.js may pass the live aurora strength (atmosphere uAurora) as ctx.aurora
         const aurora = typeof ctx.aurora === "number" ? ctx.aurora : 0;
         if (aurora > 0.25) {

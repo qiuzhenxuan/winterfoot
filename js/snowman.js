@@ -407,7 +407,8 @@ function drawItemCard(canvas, it, owned) {
 // ---------------------------------------------------------------------------
 export class SnowmanWardrobe {
   // getGold() -> number, spendGold(n) -> bool, onWear(wear), onUnlock(item), onChange()
-  constructor({ getGold, spendGold, onWear, onChange, sound } = {}) {
+  constructor({ getGold, spendGold, onWear, onDress, onChange, sound } = {}) {
+    this.onDress = onDress;
     this.getGold = getGold || (() => 0);
     this.spendGold = spendGold || (() => false);
     this.onWear = onWear;
@@ -548,11 +549,13 @@ export class SnowmanWardrobe {
     if (this.has(it.id)) {
       if (this.wear[it.slot] === it.id) return { kind: "same", item: it };
       this.put(it.id);
+      if (this.onDress) this.onDress(it);
       this.render();
       return { kind: "wear", item: it };
     }
     if (it.price) {
       if (this.buy(it.id)) {
+        if (this.onDress) this.onDress(it);
         this.render();
         return { kind: "buy", item: it };
       }

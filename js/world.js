@@ -5,6 +5,7 @@ import { riverCenterX, RIVER } from "./river.js";
 import { YARD_RECT, projectToWalkable } from "./zones.js";
 import { SouthLakeZone } from "./zoneSouth.js";
 import { NorthSpringZone } from "./zoneNorth.js";
+import { buildNoticeBoardModel } from "./board.js";
 
 function createMulberry(seed) {
   let a = seed >>> 0;
@@ -52,6 +53,7 @@ export class OutdoorWorld {
     this.claudeGreetIdx = 0;
     this.hayTroughPos = new THREE.Vector3(2.75, 0, 1.0);
     this.coopNestPos = new THREE.Vector3(4.55, 0, 2.2);
+    this.noticeBoardPos = new THREE.Vector3(6.35, 0, -3.55);
     this.paddockBounds = { minX: 1.95, maxX: 8.05, minZ: 0.7, maxZ: 5.6 };
 
     this.campfireBoost = 1.0;
@@ -69,6 +71,7 @@ export class OutdoorWorld {
     this._buildAnimalPaddockAndBarn();
     this._buildLampPosts();
     this._buildCampfireGlade();
+    this._buildNoticeBoard();
     this._buildForest();
     this._spawnInitialFirewood();
 
@@ -272,6 +275,17 @@ export class OutdoorWorld {
       for (const b of this.snowCapBatches) b.setScale(capScale);
     }
     return a;
+  }
+
+  // 布告栏: the neighbours' notice board beside the yard path (see board.js)
+  _buildNoticeBoard() {
+    const b = buildNoticeBoardModel();
+    b.group.position.copy(this.noticeBoardPos);
+    b.group.rotation.y = -0.08;
+    this.group.add(b.group);
+    this.noticeBoard = b;
+    b.setCount(0);
+    this._addBoxCollider(this.noticeBoardPos.x, this.noticeBoardPos.z, 1.55, 0.4);
   }
 
   _addBoxCollider(cx, cz, w, d) {
