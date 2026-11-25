@@ -138,6 +138,20 @@ export class AtmosphereSystem {
           float d = hash(i + vec2(1.0, 1.0));
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
         }
+        // Value noise whose x axis wraps every period cells, so noise laid around the
+        // horizon (x = azimuth / 2pi * period) meets itself due south without a seam
+        float vnoiseWrap(vec2 p, float period) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float x0 = mod(i.x, period);
+          float x1 = mod(i.x + 1.0, period);
+          float a = hash(vec2(x0, i.y));
+          float b = hash(vec2(x1, i.y));
+          float c = hash(vec2(x0, i.y + 1.0));
+          float d = hash(vec2(x1, i.y + 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
         float fbm(vec2 p) {
           float s = 0.0;
           float a = 0.5;
@@ -182,14 +196,17 @@ export class AtmosphereSystem {
 
           // Aurora: green curtains with a violet crown, rippling rays, strongest to the north
           if (uAurora > 0.001 && d.y > 0.0) {
+            // atan jumps from +pi to -pi due south: every azimuth term below repeats exactly
+            // once per turn (integer frequencies, wrapped noise) so the curtain has no seam there
             float az = atan(d.x, -d.z);
+            float azTurn = az / 6.2831853;
             float at = uTime;
-            float base = 0.13 + 0.06 * sin(az * 1.7 + at * 0.05) + 0.03 * sin(az * 4.3 - at * 0.09);
+            float base = 0.13 + 0.06 * sin(az * 2.0 + at * 0.05) + 0.03 * sin(az * 4.0 - at * 0.09);
             float rel = d.y - base;
             float curtain = smoothstep(-0.015, 0.025, rel) * exp(-max(rel, 0.0) * 3.2);
-            float rays = vnoise(vec2(az * 26.0 + at * 0.12, at * 0.05));
+            float rays = vnoiseWrap(vec2(azTurn * 163.0 + at * 0.12, at * 0.05), 163.0);
             rays = 0.35 + 0.65 * smoothstep(0.25, 0.85, rays);
-            float folds = 0.4 + 0.6 * smoothstep(0.25, 0.75, vnoise(vec2(az * 2.4 - at * 0.03, at * 0.02 + 3.7)));
+            float folds = 0.4 + 0.6 * smoothstep(0.25, 0.75, vnoiseWrap(vec2(azTurn * 15.0 - at * 0.03, at * 0.02 + 3.7), 15.0));
             float north = 0.3 + 0.7 * smoothstep(-0.5, 0.8, cos(az));
             vec3 aCol = mix(vec3(0.22, 1.0, 0.6), vec3(0.6, 0.32, 1.0), smoothstep(0.06, 0.34, rel));
             col += aCol * curtain * rays * folds * north * uAurora * 1.15 * (1.0 - cover * 0.85);
