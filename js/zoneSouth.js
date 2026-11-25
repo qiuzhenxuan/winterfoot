@@ -22,6 +22,7 @@
 // =====================================================================
 
 import * as THREE from "three";
+import { FISH, fishAvailable } from "./journal.js";
 import { makeSnowDriftGeometry } from "./landscape.js";
 import { SOUTH_TRAIL, LAKE, LAKE_SHORE } from "./zones.js";
 
@@ -87,20 +88,14 @@ const ICE_Y = 0.03;
 // ---------------------------------------------------------------------
 //  Fishing catches (catch & release — the inventory has no fish slot)
 // ---------------------------------------------------------------------
-const CATCHES = [
-  { name: "小银鱼", color: "#dff1ff", fish: 0xd4e2ec, text: "一条细细长长的小银鱼，像一缕会游的月光。看了一会儿，又轻轻放回湖里啦。" },
-  { name: "圆滚滚的鲫鱼", color: "#ffe2a8", fish: 0xb39a62, text: "圆滚滚的鲫鱼，大概整个冬天都在湖底偷吃零食。放它回去继续过冬吧。" },
-  { name: "冰湖虹鳟", color: "#ffc8da", fish: 0xa9c0a8, stripe: 0xf09ab4, text: "身上带着一道淡淡的彩虹，冬天里也这么好看。拍拍它的小脑袋，放回湖里。" },
-  { name: "害羞的小虾", color: "#ffb9a2", text: "鱼钩上挂着一只小虾，好像有点不好意思。放它回去找妈妈吧。" },
+// Fish species live in journal.js (FISH) so the book and the lake share them.
+// What else can end up on the hook:
+const JUNK_CATCHES = [
   { name: "一只旧手套", color: "#e3cbff", glove: true, text: "……是谁的手套掉进湖里了？拧干挂在码头的木桩上，失主说不定会回来找。" },
   { name: "一片冻住的枫叶", color: "#ffb47e", text: "秋天落进湖里的枫叶，被冰保存得刚刚好，红得像一枚小小的书签。" },
   { name: "空钩", color: "#cfe3f0", empty: true, text: "鱼饵被悄悄吃光了。镜湖的鱼今天格外机灵。" },
 ];
-const NIGHT_CATCH = { name: "星光小鱼", color: "#fff3a8", fish: 0x9fc4ff, text: "鳞片上映着满天星星，一眨眼就游回了湖底。" };
-const RARE_CATCHES = [
-  { name: "金色小锦鲤", color: "#ffd34d", fish: 0xffc23a, rare: true, text: "传说在镜湖钓到金色锦鲤的人，新的一岁会特别好运。偷偷许个愿，再放它回去吧。" },
-  { name: "冰里的漂流瓶", color: "#bff0ff", rare: true, text: "冰洞里漂上来一只小玻璃瓶，纸条上写着：愿你被这个世界温柔以待。" },
-];
+const BOTTLE_CATCH = { name: "冰里的漂流瓶", color: "#bff0ff", rare: true, text: "冰洞里漂上来一只小玻璃瓶，纸条上写着：愿你被这个世界温柔以待。" };
 
 const BENCH_DAY = [
   { text: "冰面像一面镜子，倒映着整片松林和天空。就这样坐一会儿吧。" },
@@ -1502,29 +1497,28 @@ export class SouthLakeZone {
     this._add(g, false, true);
     this._addGlowPool(H.x - 1.0, H.z - 0.2, 1.3, 0.4);
 
-    // A fish that leaps out of the hole on a catch, then dives back (catch & release)
+    // A fish that leaps out of the hole on a catch, then dives back (catch & release).
+    // One little low-poly fish, re-shaped and re-coloured for whichever species bit.
     const fish = new THREE.Group();
-    this.fishBodyMat = new THREE.MeshStandardMaterial({ color: 0xd4e2ec, roughness: 0.35, metalness: 0.35 });
-    this.fishStripeMat = new THREE.MeshStandardMaterial({ color: 0xf09ab4, roughness: 0.4 });
-    const fBody = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), this.fishBodyMat);
-    fBody.scale.set(0.45, 0.75, 1.7);
-    fish.add(fBody);
-    const fStripe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.22), this.fishStripeMat);
-    fStripe.position.y = 0.0;
-    fish.add(fStripe);
-    this.fishStripe = fStripe;
-    const fTail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.11, 4), this.fishBodyMat);
-    fTail.rotation.x = Math.PI / 2; // narrow end joins the body, wide fin trails behind
-    fTail.scale.set(0.3, 1, 1);
-    fTail.position.z = -0.2;
-    fish.add(fTail);
-    const fEye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.022, 0.022), new THREE.MeshBasicMaterial({ color: 0x15161c }));
-    fEye.position.set(0, 0.02, 0.1);
-    fish.add(fEye);
+    this.fishBodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.18, flatShading: true });
+    this.fishFinMat = new THREE.MeshStandardMaterial({ color: 0x9fb8cc, roughness: 0.6, side: THREE.DoubleSide, flatShading: true });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x15161c, roughness: 0.2 });
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    this.fishParts = {
+      body: new THREE.Mesh(new THREE.BufferGeometry(), this.fishBodyMat),
+      tail: new THREE.Mesh(new THREE.BufferGeometry(), this.fishFinMat),
+      dorsal: new THREE.Mesh(new THREE.BufferGeometry(), this.fishFinMat),
+      eyeL: new THREE.Mesh(new THREE.IcosahedronGeometry(0.014, 0), eyeMat),
+      eyeR: new THREE.Mesh(new THREE.IcosahedronGeometry(0.014, 0), eyeMat),
+      glintL: new THREE.Mesh(new THREE.IcosahedronGeometry(0.005, 0), glintMat),
+      glintR: new THREE.Mesh(new THREE.IcosahedronGeometry(0.005, 0), glintMat),
+    };
+    for (const m of Object.values(this.fishParts)) fish.add(m);
     fish.visible = false;
     fish.position.set(H.x, 0.1, H.z);
     this.group.add(fish);
     this.fishMesh = fish;
+    this._paintLeapingFish(FISH[0], 9);
 
     this._circle(H.x, H.z, 0.44);
     this._circle(H.x - 0.8, H.z + 0.12, 0.22);
@@ -2135,6 +2129,85 @@ export class SouthLakeZone {
     }
   }
 
+  // Shape and colour the leaping fish for one species (lathe body, flat fins, beady eyes)
+  _paintLeapingFish(def, cm) {
+    const P = this.fishParts;
+    const L = def.shape === "long" ? 0.42 : def.shape === "round" ? 0.26 : def.shape === "shrimp" ? 0.16 : 0.32;
+    const R = def.shape === "round" ? 0.085 : def.shape === "long" ? 0.05 : def.shape === "shrimp" ? 0.035 : 0.058;
+    // profile from tail (y = 0) to nose (y = L), fuller towards the head
+    const prof = [];
+    const N = 7;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const r = i === 0 ? R * 0.22 : i === N ? 0.0001 : R * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.75);
+      prof.push(new THREE.Vector2(r, t * L));
+    }
+    let geo = new THREE.LatheGeometry(prof, 8);
+    geo.rotateX(Math.PI / 2); // nose along +z
+    geo.translate(0, 0, -L * 0.45);
+    geo.scale(0.62, 1, 1); // flattened sideways like a real fish
+    geo = geo.toNonIndexed();
+    geo.computeVertexNormals();
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const cBody = new THREE.Color(def.body);
+    const cBelly = new THREE.Color(def.belly);
+    const cStripe = def.stripe ? new THREE.Color(def.stripe) : null;
+    const cSpot = def.spots ? new THREE.Color(def.spots) : null;
+    const tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i += 3) {
+      // colour per triangle so the low-poly facets read crisply
+      const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+      const z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+      const k = y / R;
+      tmp.copy(k < -0.15 ? cBelly : cBody);
+      if (cStripe && Math.abs(k + 0.02) < 0.32) tmp.copy(cStripe);
+      if (cSpot && k > 0.05 && ((i / 3) * 7) % 5 < 1) tmp.copy(cSpot);
+      if (z > L * 0.38) tmp.multiplyScalar(0.92); // head a touch darker
+      for (let j = 0; j < 3; j++) tmp.toArray(colors, (i + j) * 3);
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    P.body.geometry.dispose();
+    P.body.geometry = geo;
+
+    // forked tail and a little dorsal fin
+    const tail = new THREE.Shape();
+    const tl = L * 0.32;
+    tail.moveTo(0, 0);
+    tail.lineTo(-tl, R * 1.15);
+    tail.lineTo(-tl * 0.72, 0);
+    tail.lineTo(-tl, -R * 1.15);
+    tail.lineTo(0, 0);
+    const tg = new THREE.ShapeGeometry(tail);
+    tg.rotateY(-Math.PI / 2); // shape x -> z, so the negative x of the fork trails behind
+    tg.translate(0, 0, -L * 0.45 + 0.004);
+    P.tail.geometry.dispose();
+    P.tail.geometry = def.shape === "shrimp" ? new THREE.BufferGeometry() : tg;
+    const dor = new THREE.Shape();
+    dor.moveTo(0, 0);
+    dor.lineTo(-L * 0.16, R * 0.75);
+    dor.lineTo(-L * 0.26, 0);
+    dor.lineTo(0, 0);
+    const dg = new THREE.ShapeGeometry(dor);
+    dg.rotateY(-Math.PI / 2);
+    dg.translate(0, R * 0.82, L * 0.08);
+    P.dorsal.geometry.dispose();
+    P.dorsal.geometry = def.shape === "shrimp" ? new THREE.BufferGeometry() : dg;
+    this.fishFinMat.color.set(def.fin);
+    this.fishBodyMat.emissive.setHex(def.rare ? 0x553800 : 0x000000);
+
+    const ez = L * 0.34;
+    const ex = R * 0.36;
+    const ey = R * 0.16;
+    P.eyeL.position.set(ex, ey, ez);
+    P.eyeR.position.set(-ex, ey, ez);
+    P.glintL.position.set(ex + 0.008, ey + 0.006, ez + 0.006);
+    P.glintR.position.set(-ex - 0.008, ey + 0.006, ez + 0.006);
+    // bigger catches look a bit bigger (clamped so the old pike still fits the hole)
+    const sc = THREE.MathUtils.clamp(0.75 + (cm || 10) / 60, 0.8, 1.9);
+    this.fishMesh.scale.setScalar(sc);
+  }
+
   _resolveCatch() {
     const f = this.fish;
     const ctx = f.ctx;
@@ -2142,15 +2215,39 @@ export class SouthLakeZone {
     f.cooldown = 3.2;
     this._fishIt.label = "把鱼线重新理好……";
     if (!ctx) return;
-    const night = (ctx.nightFactor ?? 0) > 0.55;
+    const hours = ctx.timeHours ?? 12;
+    const snow = ctx.snowLevel ?? 1;
+    const book = ctx.journal;
     let c;
-    if (Math.random() < 0.08) {
-      c = RARE_CATCHES[(f.count + (night ? 1 : 0)) % RARE_CATCHES.length];
+    const r = Math.random();
+    if (r < 0.03) {
+      c = BOTTLE_CATCH;
+    } else if (r < 0.22) {
+      const pool = JUNK_CATCHES.filter((j) => j !== f.last);
+      c = pool[Math.floor(Math.random() * pool.length)];
     } else {
-      const pool = night ? [...CATCHES, NIGHT_CATCH, NIGHT_CATCH] : CATCHES;
-      let i = Math.floor(Math.random() * pool.length);
-      if (pool[i] === f.last) i = (i + 1) % pool.length;
-      c = pool[i];
+      // Fish that swim at this hour in this weather; ones the book is still missing bite a bit more
+      const avail = FISH.filter((x) => fishAvailable(x, hours, snow));
+      let sum = 0;
+      const w = avail.map((x) => {
+        let k = x.weight * (book && !book.has("fish", x.id) ? 1.6 : 1) * (x.id === f.lastFishId ? 0.5 : 1);
+        sum += k;
+        return k;
+      });
+      let roll = Math.random() * sum;
+      let pick = avail[avail.length - 1];
+      for (let i = 0; i < avail.length; i++) {
+        roll -= w[i];
+        if (roll <= 0) {
+          pick = avail[i];
+          break;
+        }
+      }
+      f.lastFishId = pick.id;
+      // sizes lean small; now and then a big one
+      const t = Math.pow(Math.random(), 1.6);
+      const cm = Math.round(pick.size[0] + (pick.size[1] - pick.size[0]) * t);
+      c = { fishDef: pick, name: pick.name, cm, rare: !!pick.rare, color: pick.rare ? "#ffd34d" : "#dff1ff", text: pick.line };
     }
     f.last = c;
     if (ctx.day !== f.day) {
@@ -2161,15 +2258,25 @@ export class SouthLakeZone {
 
     ctx.sound.waterSplash();
     ctx.burst(HOLE.x, 0.15, HOLE.z, c.rare ? 0xffd34d : 0x9fdcff, c.rare ? 18 : 12, 1.7);
-    ctx.popup(HOLE.x, 1.3, HOLE.z, c.empty ? "空钩……" : `钓到了 ${c.name}!`, c.color);
+    ctx.popup(HOLE.x, 1.3, HOLE.z, c.empty ? "空钩……" : c.cm ? `钓到了 ${c.name}! ${c.cm} 厘米` : `钓到了 ${c.name}!`, c.color);
     let msg = c.text;
+    if (c.fishDef) {
+      msg += c.fishDef.shape === "shrimp" ? " 放它回去找妈妈吧。" : " 量了量有 " + c.cm + " 厘米，又轻轻放回湖里啦。";
+      if (book) {
+        const res = book.discover("fish", c.fishDef.id);
+        const record = book.recordFishSize(c.fishDef.id, c.cm);
+        if (res.isNew) {
+          msg += `\n✦ 新记入鱼类图鉴：${c.fishDef.name}（${res.count}/${res.total}）`;
+          ctx.sound.questDone?.();
+        } else if (record) {
+          msg += `\n✦ 刷新了${c.fishDef.name}的最大纪录！`;
+        }
+      }
+    }
     if (f.count === 5) msg += " 今天已经钓了 5 次，冰洞边的小鱼都要认识你啦。";
     ctx.toast(msg);
-    if (c.fish !== undefined) {
-      this.fishBodyMat.color.setHex(c.fish);
-      this.fishStripe.visible = c.stripe !== undefined;
-      if (c.stripe !== undefined) this.fishStripeMat.color.setHex(c.stripe);
-      this.fishBodyMat.emissive.setHex(c.rare ? 0x664400 : 0x000000);
+    if (c.fishDef) {
+      this._paintLeapingFish(c.fishDef, c.cm);
       f.jumpT = 0;
     }
     if (c.glove && this.mitten) this.mitten.visible = true;

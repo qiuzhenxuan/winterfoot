@@ -531,7 +531,10 @@ class WinterfootGame {
 
   // A whole page of the book filled in: a small reward and a cheer
   _onJournalComplete(kind) {
-    const rewards = { stars: [300, "星图册集齐啦！冬麓的夜空你都认识了。奖励 300 金币"] };
+    const rewards = {
+      stars: [300, "星图册集齐啦！冬麓的夜空你都认识了。奖励 300 金币"],
+      fish: [500, "镜湖的鱼都认识你啦！鱼类图鉴集齐，奖励 500 金币"],
+    };
     const [gold, line] = rewards[kind] || [200, "图鉴的这一页集齐啦！奖励 200 金币"];
     this.gold += gold;
     setTimeout(() => {
@@ -1039,6 +1042,7 @@ class WinterfootGame {
       burst: (x, y, z, color, count, speed) => this.world.spawnBurst(x, y, z, color, count, speed),
       timeHours: this.atmosphere.timeHours,
       nightFactor: this.atmosphere.nightFactor,
+      snowLevel: this.atmosphere.snowLevel,
       aurora: this.atmosphere.skyUniforms?.uAurora?.value ?? 0,
       day: this.day,
       player: this.player,

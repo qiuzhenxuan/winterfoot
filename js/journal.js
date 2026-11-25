@@ -86,8 +86,174 @@ export const CONSTELLATIONS = [
   },
 ];
 
+
+// ---------------------------------------------------------------------
+//  Fish of 镜湖 (catch & release). when: hours windows; snow: minimum snow level
+//  shape: "slim" | "round" | "long" | "shrimp"; body / belly / fin colours drive both the
+//  pixel card and the 3D fish that leaps out of the ice hole.
+// ---------------------------------------------------------------------
+export const FISH = [
+  { id: "silverfish", name: "小银鱼", size: [6, 11], weight: 5, shape: "slim", body: "#cfe0ec", belly: "#f4fbff", fin: "#9fb8cc",
+    line: "一条细细长长的小银鱼，像一缕会游的月光。", when: "全天", hint: "什么时候都能钓到，先从它开始吧。" },
+  { id: "crucian", name: "圆滚滚的鲫鱼", size: [12, 24], weight: 5, shape: "round", body: "#b39a62", belly: "#e8d8a8", fin: "#8a7445",
+    line: "圆滚滚的鲫鱼，大概整个冬天都在湖底偷吃零食。", when: "全天", hint: "什么时候都能钓到。" },
+  { id: "shrimp", name: "害羞的小虾", size: [3, 7], weight: 3, shape: "shrimp", body: "#f2a48c", belly: "#ffd6c6", fin: "#d97a62",
+    line: "鱼钩上挂着一只小虾，好像有点不好意思。", when: "全天", hint: "偶尔会挂在鱼钩上。" },
+  { id: "trout", name: "冰湖虹鳟", size: [20, 42], weight: 4, shape: "slim", body: "#a9c0a8", belly: "#eef2dc", fin: "#7f9a7e", stripe: "#f09ab4",
+    line: "身上带着一道淡淡的彩虹，冬天里也这么好看。", when: "白天 6 点到 17 点", hours: [[6, 17]], hint: "白天才出来晒太阳。" },
+  { id: "whitefish", name: "晨雾白鲑", size: [18, 36], weight: 3, shape: "slim", body: "#e6ecef", belly: "#ffffff", fin: "#b8c6cf",
+    line: "清晨的薄雾还没散，白鲑就在冰下慢慢游，像一片会动的雪。", when: "清晨 5 点到 9 点", hours: [[5, 9]], hint: "太阳刚出来的时候去冰洞看看。" },
+  { id: "dusk_perch", name: "暮光鳜鱼", size: [16, 34], weight: 3, shape: "round", body: "#d98b4a", belly: "#ffd9a0", fin: "#a85a2c", spots: "#7a3e1c",
+    line: "夕阳落在冰面上的时候，鳜鱼身上的花纹也跟着发光。", when: "黄昏 16 点到 19 点半", hours: [[16, 19.5]], hint: "黄昏时分会游到冰洞附近。" },
+  { id: "snow_perch", name: "雪花鲈", size: [14, 30], weight: 3, shape: "round", body: "#8fb3c9", belly: "#eaf6ff", fin: "#6a8ea6", spots: "#ffffff",
+    line: "鳞片上的白点像落了一身雪花，下雪天特别爱咬钩。", when: "下雪的时候", snow: 1, hint: "下雪的时候才出来。" },
+  { id: "starfish_minnow", name: "星光小鱼", size: [5, 10], weight: 4, shape: "slim", body: "#9fc4ff", belly: "#e2eeff", fin: "#6f94d6", spots: "#fff3a8",
+    line: "鳞片上映着满天星星，一眨眼就游回了湖底。", when: "夜里 20 点到清晨 5 点", hours: [[20, 24], [0, 5]], hint: "只在夜里出现。" },
+  { id: "sculpin", name: "瞌睡小胖头", size: [8, 15], weight: 2, shape: "round", body: "#7e7466", belly: "#c9bba4", fin: "#5c5348",
+    line: "大脑袋、小尾巴，半夜被钓上来还在打哈欠。", when: "深夜 22 点到 3 点", hours: [[22, 24], [0, 3]], hint: "深夜才醒着。" },
+  { id: "ice_cod", name: "冰湖鳕", size: [25, 52], weight: 2, shape: "long", body: "#9aa7a1", belly: "#e7ece6", fin: "#6f7c76", spots: "#c8d2cc",
+    line: "大雪天从深水里游上来的鳕鱼，摸上去冰冰凉凉。", when: "大雪的时候", snow: 2, hint: "要等一场大雪。" },
+  { id: "koi", name: "金色小锦鲤", size: [15, 28], weight: 0.45, shape: "round", body: "#ffc23a", belly: "#fff0b8", fin: "#ff8a3a", spots: "#ffffff", rare: true,
+    line: "传说在镜湖钓到金色锦鲤的人，新的一岁会特别好运。", when: "全天 · 很少见", hint: "很少见，多钓几次碰碰运气。" },
+  { id: "old_pike", name: "镜湖老狗鱼", size: [70, 110], weight: 0.6, shape: "long", body: "#5f7a52", belly: "#d8dcae", fin: "#465c3c", spots: "#c9d68a", rare: true,
+    line: "镜湖的老住户，牙齿尖尖，眼神却很温和。和它合个影，再放它回去当湖主。", when: "大雪的夜里 · 很少见", hours: [[20, 24], [0, 5]], snow: 2, hint: "传说它只在大雪的夜里出没。" },
+];
+
+const inHours = (h, ranges) => !ranges || ranges.some(([a, b]) => h >= a && h < b);
+export function fishAvailable(f, hours, snowLevel) {
+  return inHours(hours, f.hours) && (f.snow === undefined || snowLevel >= f.snow);
+}
+
+// Pixel fish card: icy water, a little fish drawn from a few ellipses with an outline
+function drawFishCard(canvas, f, found) {
+  const W = 64;
+  const H = 44;
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext("2d");
+  if (!g) return;
+  g.imageSmoothingEnabled = false;
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, found ? "#9fd3ea" : "#a8b4bc");
+  grad.addColorStop(1, found ? "#3f7fa6" : "#6f7d88");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  const rnd = seeded(f.id.length * 977 + f.id.charCodeAt(0));
+  // light ripples and bubbles
+  g.fillStyle = "rgba(255,255,255,0.28)";
+  for (let i = 0; i < 6; i++) g.fillRect(Math.floor(rnd() * W), Math.floor(rnd() * 10) + 2, 3 + Math.floor(rnd() * 5), 1);
+  g.fillStyle = "rgba(255,255,255,0.45)";
+  for (let i = 0; i < 4; i++) {
+    const x = 48 + Math.floor(rnd() * 12);
+    const y = 6 + Math.floor(rnd() * 18);
+    g.fillRect(x, y, 1, 1);
+  }
+  // weeds at the bottom
+  g.fillStyle = found ? "#2f6b5a" : "#56636b";
+  for (let x = 2; x < W; x += 5 + Math.floor(rnd() * 4)) {
+    const h = 4 + Math.floor(rnd() * 6);
+    for (let y = 0; y < h; y++) g.fillRect(x + (y % 4 < 2 ? 0 : 1), H - 1 - y, 1, 1);
+  }
+
+  // rasterise the fish into a small grid so we can outline it
+  const grid = new Map(); // "x,y" -> colour
+  const put = (x, y, c) => grid.set(`${x},${y}`, c);
+  const sil = !found;
+  const col = (c) => (sil ? "#2b3238" : c);
+  const cx = 30;
+  const cy = 22;
+  const shape = f.shape;
+  const len = shape === "long" ? 20 : shape === "round" ? 14 : shape === "shrimp" ? 12 : 17;
+  const ht = shape === "round" ? 8 : shape === "long" ? 5 : shape === "shrimp" ? 4 : 5.5;
+  if (shape === "shrimp") {
+    // curled body: chain of shrinking segments
+    for (let i = 0; i < 9; i++) {
+      const a = -0.2 + i * 0.36;
+      const r = 4.2 - i * 0.32;
+      const sx = cx + Math.cos(a) * 7;
+      const sy = cy + Math.sin(a) * 6;
+      for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r) put(Math.round(sx + x), Math.round(sy + y), col(i % 2 ? f.body : f.belly));
+    }
+    for (let i = 0; i < 9; i++) put(cx + 8 + i, cy - 6 - Math.round(i * 0.6), col(f.fin)); // feelers
+    for (let i = 0; i < 7; i++) put(cx + 9 + i, cy - 4 - Math.round(i * 0.25), col(f.fin));
+  } else {
+    // tail
+    for (let y = -ht; y <= ht; y++) {
+      const w = Math.round(4 + Math.abs(y) * 0.5);
+      for (let x = 0; x < w; x++) if (Math.abs(y) >= x * 0.55 - 1) put(cx - len - x + 1, cy + Math.round(y), col(f.fin));
+    }
+    // body (egg shape, fuller at the head)
+    for (let y = -ht - 1; y <= ht + 1; y++) {
+      for (let x = -len; x <= len; x++) {
+        const k = x > 0 ? len * 0.92 : len;
+        const hh = ht * (x > 0 ? 1 : 1 - 0.25 * (-x / len));
+        if ((x * x) / (k * k) + (y * y) / (hh * hh) <= 1) {
+          const belly = y > hh * 0.25;
+          let c = belly ? f.belly : f.body;
+          if (f.stripe && Math.abs(y - hh * 0.05) < 1.2 && x < len * 0.6) c = f.stripe;
+          if (f.spots && !belly && ((x * 7 + y * 13) & 7) === 0 && x < len * 0.7) c = f.spots;
+          put(cx + x, cy + y, col(c));
+        }
+      }
+    }
+    // dorsal and belly fins
+    for (let i = 0; i < 6; i++) for (let j = 0; j <= Math.floor((6 - i) / 2); j++) put(cx - 4 + i, cy - Math.ceil(ht) - 1 - j, col(f.fin));
+    for (let i = 0; i < 3; i++) put(cx + 1 + i, cy + Math.ceil(ht) + 1, col(f.fin));
+    // gill line
+    if (!sil) for (let y = -ht * 0.5; y <= ht * 0.5; y++) put(cx + Math.round(len * 0.45), cy + Math.round(y), f.fin);
+  }
+  // outline
+  const dark = sil ? "#1a1f24" : "#2a1a12";
+  for (const key of grid.keys()) {
+    const [x, y] = key.split(",").map(Number);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k2 = `${x + dx},${y + dy}`;
+      if (!grid.has(k2)) {
+        g.fillStyle = dark;
+        g.fillRect(x + dx, y + dy, 1, 1);
+      }
+    }
+  }
+  for (const [key, c] of grid) {
+    const [x, y] = key.split(",").map(Number);
+    g.fillStyle = c;
+    g.fillRect(x, y, 1, 1);
+  }
+  if (!sil) {
+    // eye with a highlight, a shine on the back
+    const ex = shape === "shrimp" ? cx + 9 : cx + Math.round(len * 0.62);
+    const ey = shape === "shrimp" ? cy - 3 : cy - Math.round(ht * 0.3);
+    g.fillStyle = "#15161c";
+    g.fillRect(ex, ey, 2, 2);
+    g.fillStyle = "#ffffff";
+    g.fillRect(ex, ey, 1, 1);
+    if (shape !== "shrimp") {
+      g.fillStyle = "rgba(255,255,255,0.55)";
+      for (let i = 0; i < 6; i++) g.fillRect(cx - 2 + i, cy - Math.round(ht * 0.62), 1, 1);
+    }
+    if (f.rare) {
+      g.fillStyle = "#fff3a8";
+      for (const [x, y] of [[6, 6], [56, 8], [10, 34]]) {
+        g.fillRect(x, y - 1, 1, 3);
+        g.fillRect(x - 1, y, 3, 1);
+      }
+    }
+  }
+}
+
 const TABS = [
   { kind: "stars", title: "星图", empty: "夜里去北边观星台，用望远镜看看星星吧", hint: "天黑以后去北边观星台，用望远镜慢慢找。", list: () => CONSTELLATIONS },
+  {
+    kind: "fish",
+    title: "鱼",
+    empty: "去南边镜湖的冰钓小洞钓钓鱼吧。不同的时间和天气，会遇到不同的鱼。",
+    list: () => FISH,
+    draw: (cv, f, found) => drawFishCard(cv, f, found),
+    detail: (f, book) => {
+      const best = book.extra.fishBest && book.extra.fishBest[f.id];
+      return `出没：${f.when}` + (best ? ` · 最大纪录 ${best} 厘米` : "");
+    },
+  },
 ];
 
 // Tiny seeded random so a card looks the same every time it is drawn
@@ -198,7 +364,7 @@ export class Journal {
     this.onNew = onNew;
     this.onComplete = onComplete;
     this.tabs = TABS;
-    this.found = { stars: [] };
+    this.found = { stars: [], fish: [] };
     this.extra = {}; // per-kind details (best fish size...), filled by later pages
     this.rewarded = [];
     this.tab = "stars";
@@ -245,6 +411,14 @@ export class Journal {
     return { isNew, count, total, entry, complete };
   }
 
+  // Keeps the biggest catch per fish; returns true when this one beats the old record
+  recordFishSize(id, cm) {
+    if (!this.extra.fishBest) this.extra.fishBest = {};
+    const old = this.extra.fishBest[id] || 0;
+    if (cm > old) this.extra.fishBest[id] = cm;
+    return old > 0 && cm > old;
+  }
+
   // Something not yet found, for the zones to aim at (null when the page is full)
   pickMissing(kind) {
     const t = this.tabs.find((x) => x.kind === kind);
@@ -268,7 +442,7 @@ export class Journal {
   }
 
   reset() {
-    this.found = { stars: [] };
+    this.found = { stars: [], fish: [] };
     this.extra = {};
     this.rewarded = [];
     this._refreshBadge();
